@@ -1,49 +1,69 @@
-import { useEffect, useState } from "react";
-import type { Schema } from "../amplify/data/resource";
-import { generateClient } from "aws-amplify/data";
-import { useAuthenticator } from '@aws-amplify/ui-react';
+import { useState } from "react";
+import { Authenticator } from "@aws-amplify/ui-react";
+import "@aws-amplify/ui-react/styles.css";
+import { Amplify } from "aws-amplify";
+import outputs from "../amplify_outputs.json";
+import Landing from "./pages/Landing";
+import Dispatch from "./pages/Dispatch";
+import Drivers from "./pages/Drivers";
+import Vehicles from "./pages/Vehicles";
+import DispatchShell from "./components/dispatch/DispatchShell";
+import type { NavId } from "./components/dispatch/SideNav";
+import "./styles.css";
 
-const client = generateClient<Schema>();
+Amplify.configure(outputs);
 
-function App() {
-  const [todos, setTodos] = useState<Array<Schema["Todo"]["type"]>>([]);
+type Route = "landing" | "dispatch" | "drivers" | "vehicles";
 
-  useEffect(() => {
-    client.models.Todo.observeQuery().subscribe({
-      next: (data) => setTodos([...data.items]),
-    });
-  }, []);
+export default function App() {
+  const [route, setRoute] = useState<Route>("landing");
 
-  function createTodo() {
-    client.models.Todo.create({ content: window.prompt("Todo content") });
-  }
-
-  function deleteTodo(id: string) {
-    client.models.Todo.delete({ id })
-  }
-
-  const { signOut } = useAuthenticator();
+  const handleNav = (id: NavId) => {
+    if (id === "dispatch" || id === "drivers" || id === "vehicles") setRoute(id);
+  };
 
   return (
-    <main>
-      <h1>My todos</h1>
-      <button onClick={createTodo}>+ new</button>
-      <ul>
-        {todos.map((todo) => (
-          <li key={todo.id} onClick={() => deleteTodo(todo.id)}>{todo.content}</li>
-          
-        ))}
-      </ul>
-      <div>
-        🥳 App successfully hosted. Try creating a new todo.
-        <br />
-        <a href="https://docs.amplify.aws/react/start/quickstart/#make-frontend-updates">
-          Review next step of this tutorial.
-        </a>
-      </div>
-      <button onClick={signOut}>Sign out</button>
-    </main>
+    <Authenticator>
+      {({ signOut, user }) => {
+        const isSignedIn = !!user;
+        const email = user?.signInDetails?.loginId;
+
+        if (route === "landing") {
+          return (
+            <Landing
+              isSignedIn={isSignedIn}
+              onSignIn={() => setRoute("dispatch")}
+              onSignOut={() => { signOut?.(); setRoute("landing"); }}
+              onGoToApp={() => setRoute("dispatch")}
+            />
+          );
+        }
+
+        // App shell wraps Drivers + Vehicles so they get the sidebar
+        if (route === "drivers") {
+          return (
+            <DispatchShell activeNav="drivers" onNavChange={handleNav} userEmail={email} onSignOut={() => { signOut?.(); setRoute("landing"); }}>
+              <Drivers />
+            </DispatchShell>
+          );
+        }
+
+        if (route === "vehicles") {
+          return (
+            <DispatchShell activeNav="vehicles" onNavChange={handleNav} userEmail={email} onSignOut={() => { signOut?.(); setRoute("landing"); }}>
+              <Vehicles />
+            </DispatchShell>
+          );
+        }
+
+        // Default: dispatch
+        return (
+          <Dispatch
+            onSignOut={() => { signOut?.(); setRoute("landing"); }}
+            onNavChange={handleNav}
+          />
+        );
+      }}
+    </Authenticator>
   );
 }
-
-export default App;
