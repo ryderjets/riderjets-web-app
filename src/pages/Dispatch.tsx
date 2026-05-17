@@ -4,6 +4,7 @@ import { fetchUserAttributes } from "aws-amplify/auth";
 import type { Schema } from "../../amplify/data/resource";
 import DispatchShell from "../components/dispatch/DispatchShell";
 import PageHeader from "../components/dispatch/PageHeader";
+import type { TimelineFilter } from "../components/dispatch/PageHeader";
 import KpiStrip from "../components/dispatch/KpiStrip";
 import OrdersToolbar from "../components/dispatch/OrdersToolbar";
 import OrdersTable from "../components/dispatch/OrdersTable";
@@ -32,6 +33,7 @@ export default function Dispatch({ onSignOut, onNavChange }: Props) {
   const [sheetOpen, setSheetOpen]   = useState(false);
   const [editTrip, setEditTrip]     = useState<Trip | null>(null);
   const [page, setPage]             = useState(0);
+  const [timeline, setTimeline]     = useState<TimelineFilter>("today");
   const PAGE_SIZE = 25;
 
   useEffect(() => {
@@ -76,7 +78,21 @@ export default function Dispatch({ onSignOut, onNavChange }: Props) {
   const toggleFilter = (s: TripStatus) =>
     setFilters((f) => f.includes(s) ? f.filter((x) => x !== s) : [...f, s]);
 
-  const filtered = trips.filter((t) => {
+  function getTimelineTrips() {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    if (timeline === "today") return trips.filter((t) => t.transactionDate === todayStr);
+    const cutoff = new Date(now);
+    if (timeline === "last7")  cutoff.setDate(now.getDate() - 7);
+    if (timeline === "last30") cutoff.setDate(now.getDate() - 30);
+    if (timeline === "month")  cutoff.setDate(1);
+    const cutoffStr = cutoff.toISOString().split("T")[0];
+    return trips.filter((t) => (t.transactionDate ?? "") >= cutoffStr);
+  }
+
+  const timelineTrips = getTimelineTrips();
+
+  const filtered = timelineTrips.filter((t) => {
     const q = search.toLowerCase();
     const matchSearch = !search ||
       t.orderNumber.toLowerCase().includes(q) ||
@@ -89,9 +105,9 @@ export default function Dispatch({ onSignOut, onNavChange }: Props) {
 
   return (
     <DispatchShell activeNav={activeNav} onNavChange={(id) => { setActiveNav(id); onNavChange?.(id); }} userEmail={userEmail} onSignOut={onSignOut}>
-      <PageHeader onNewOrder={openNew} />
+      <PageHeader onNewOrder={openNew} timeline={timeline} onTimeline={setTimeline} />
 
-      <KpiStrip trips={trips} />
+      <KpiStrip trips={timelineTrips} timeline={timeline} />
 
       <OrdersToolbar
         search={search} onSearch={(v) => { setSearch(v); setPage(0); }}
