@@ -38,6 +38,15 @@ const VEHICLE_LABELS: Record<string, string> = {
   SMALL_TRUCK: "Small Truck", LARGE_TRUCK: "Large Truck", OTHER: "Other",
 };
 
+function formatTransactionDate(value?: string | null) {
+  if (!value) return "—";
+  const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${year}-${months[Number(month) - 1]}-${day}`;
+}
+
 export default function OrdersTable({
   trips, loading, error, onRetry, onRowClick, onEdit, onDelete,
   onNewOrder, page, pageSize, onPage,
@@ -140,7 +149,7 @@ export default function OrdersTable({
               >
                 <td style={tdStyle}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                    {trip.transactionDate ?? "—"}
+                    {formatTransactionDate(trip.transactionDate)}
                   </span>
                 </td>
                 <td style={tdStyle}>

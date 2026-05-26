@@ -41,16 +41,21 @@ const VEHICLE_LABELS: Record<string, string> = {
 };
 
 const STATUS_OPTIONS: { value: TripStatus; label: string }[] = [
-  { value: "PENDING",     label: "Pending" },
   { value: "IN_PROGRESS", label: "In Progress" },
+  { value: "PENDING",     label: "Pending Payment" },
   { value: "COMPLETED",   label: "Completed" },
   { value: "BLOCKED",     label: "Blocked" },
   { value: "ISSUES",      label: "Issues" },
   { value: "OTHER",       label: "Other" },
 ];
 
+function getDefaultTransactionDate() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+}
+
 const empty: TripInput = {
-  transactionDate: new Date().toISOString().split("T")[0],
+  transactionDate: getDefaultTransactionDate(),
   orderNumber: "", vendor: "", driverName: "", driverPhone: "",
   vehicleType: "TATA_ACE", vehicleNumber: "", driverId: "", vehicleId: "",
   expense: 0, status: "PENDING", notes: "", podUrl: "", podKind: "NONE",

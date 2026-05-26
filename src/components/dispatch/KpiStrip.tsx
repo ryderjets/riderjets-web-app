@@ -86,7 +86,7 @@ export default function KpiStrip({ trips, timeline, reducedMotion }: Props) {
         reducedMotion={reducedMotion}
       />
       <KpiCard
-        label="Pending"
+        label="Pending Payment"
         expense={sumExpense(byStatus(trips, "PENDING"))}
         tripCount={byStatus(trips, "PENDING").length}
         tripLabel="waiting"

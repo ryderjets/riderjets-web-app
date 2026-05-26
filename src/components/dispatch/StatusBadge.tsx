@@ -3,12 +3,12 @@ import { motion } from "framer-motion";
 export type TripStatus = "COMPLETED" | "IN_PROGRESS" | "PENDING" | "BLOCKED" | "ISSUES" | "OTHER";
 
 const cfg: Record<TripStatus, { label: string; color: string; bg: string }> = {
-  COMPLETED:   { label: "Completed",   color: "hsl(160,60%,42%)",  bg: "hsla(160,60%,42%,0.14)" },
-  IN_PROGRESS: { label: "In Progress", color: "hsl(210,90%,55%)",  bg: "hsla(210,90%,55%,0.14)" },
-  PENDING:     { label: "Pending",     color: "hsl(38,92%,48%)",   bg: "hsla(38,92%,48%,0.14)"  },
-  BLOCKED:     { label: "Blocked",     color: "hsl(0,80%,55%)",    bg: "hsla(0,80%,55%,0.14)"   },
-  ISSUES:      { label: "Issues",      color: "hsl(25,90%,50%)",   bg: "hsla(25,90%,50%,0.14)"  },
-  OTHER:       { label: "Other",       color: "hsl(215,16%,55%)",  bg: "hsla(215,16%,55%,0.12)" },
+  COMPLETED:   { label: "Completed",       color: "hsl(160,60%,42%)",  bg: "hsla(160,60%,42%,0.14)" },
+  IN_PROGRESS: { label: "In Progress",     color: "hsl(210,90%,55%)",  bg: "hsla(210,90%,55%,0.14)" },
+  PENDING:     { label: "Pending Payment", color: "hsl(38,92%,48%)",   bg: "hsla(38,92%,48%,0.14)"  },
+  BLOCKED:     { label: "Blocked",         color: "hsl(0,80%,55%)",    bg: "hsla(0,80%,55%,0.14)"   },
+  ISSUES:      { label: "Issues",          color: "hsl(25,90%,50%)",   bg: "hsla(25,90%,50%,0.14)"  },
+  OTHER:       { label: "Other",           color: "hsl(215,16%,55%)",  bg: "hsla(215,16%,55%,0.12)" },
 };
 
 export default function StatusBadge({ status }: { status: TripStatus | string | null | undefined }) {

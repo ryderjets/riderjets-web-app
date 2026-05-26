@@ -15,7 +15,16 @@ interface Props {
   refreshing: boolean;
 }
 
-const ALL_STATUSES: TripStatus[] = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED", "ISSUES", "OTHER"];
+const STATUS_LABELS: Record<TripStatus, string> = {
+  IN_PROGRESS: "In Progress",
+  PENDING: "Pending Payment",
+  COMPLETED: "Completed",
+  BLOCKED: "Blocked",
+  ISSUES: "Issues",
+  OTHER: "Other",
+};
+
+const ALL_STATUSES: TripStatus[] = ["IN_PROGRESS", "PENDING", "COMPLETED", "BLOCKED", "ISSUES", "OTHER"];
 
 export default function OrdersToolbar({
   search, onSearch, activeFilters, onToggleFilter,
@@ -127,7 +136,7 @@ export default function OrdersToolbar({
                   cursor: "pointer",
                 }}
               >
-                {s.replace("_", " ")}
+                {STATUS_LABELS[s] || s}
                 {on && <X size={10} />}
               </button>
             );
