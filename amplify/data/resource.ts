@@ -35,6 +35,7 @@ const schema = a.schema({
       phone:            a.string().required(),
       vehicleType:      a.enum([...VEHICLE_TYPES]),
       preferredVendor:  a.string(),
+      address:          a.string(),
       licenseNumber:    a.string(),
       licenseExpiry:    a.date(),
       notes:            a.string(),
