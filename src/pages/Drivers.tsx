@@ -1,9 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { generateClient } from "aws-amplify/data";
 import { uploadFile, getFileUrl } from "../lib/storage";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.js?url";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, Clock, ShieldCheck, ShieldAlert, User, Pencil } from "lucide-react";
 import type { Schema } from "../../amplify/data/resource";
+
+GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const client = generateClient<Schema>();
 type Driver = Schema["Driver"]["type"];
@@ -39,15 +43,18 @@ export default function Drivers() {
   // Attachment states
   const [aadharLabel, setAadharLabel] = useState<string>("");
   const [aadharUploading, setAadharUploading] = useState(false);
-  const [aadharPreview, setAadharPreview] = useState<string | null>(null);
+  const [aadharPreviewUrl, setAadharPreviewUrl] = useState<string | null>(null);
+  const [aadharThumbnail, setAadharThumbnail] = useState<string | null>(null);
 
   const [licenseFileLabel, setLicenseFileLabel] = useState<string>("");
   const [licenseUploading, setLicenseUploading] = useState(false);
-  const [licensePreview, setLicensePreview] = useState<string | null>(null);
+  const [licensePreviewUrl, setLicensePreviewUrl] = useState<string | null>(null);
+  const [licenseThumbnail, setLicenseThumbnail] = useState<string | null>(null);
 
   const [panLabel, setPanLabel] = useState<string>("");
   const [panUploading, setPanUploading] = useState(false);
-  const [panPreview, setPanPreview] = useState<string | null>(null);
+  const [panPreviewUrl, setPanPreviewUrl] = useState<string | null>(null);
+  const [panThumbnail, setPanThumbnail] = useState<string | null>(null);
 
   const [uploadStatusMessage, setUploadStatusMessage] = useState<string>("");
   const [uploadStatusType, setUploadStatusType] = useState<"success" | "error" | "info">("info");
@@ -71,6 +78,43 @@ export default function Drivers() {
     setUploadStatusType(type);
     if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
     uploadStatusTimer.current = window.setTimeout(() => setUploadStatusMessage(""), 3000);
+  }
+
+  function isPdfKey(path?: string | null): boolean {
+    return !!path && path.toLowerCase().endsWith(".pdf");
+  }
+
+  async function loadPdfThumbnail(url: string): Promise<string | null> {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`PDF fetch failed: ${resp.status}`);
+      const array = await resp.arrayBuffer();
+      const pdf = await getDocument({ data: array }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = Math.min(1, 150 / viewport.width) || 1;
+      const renderViewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = renderViewport.width;
+      canvas.height = renderViewport.height;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+      return canvas.toDataURL("image/png");
+    } catch (err) {
+      console.debug("PDF thumbnail generation failed", err);
+      return null;
+    }
+  }
+
+  async function setAttachmentPreview(key: string, url: string | null, setPreviewUrl: (value: string | null) => void, setThumbnail: (value: string | null) => void) {
+    setPreviewUrl(url);
+    if (url && isPdfKey(key)) {
+      const thumb = await loadPdfThumbnail(url);
+      setThumbnail(thumb);
+    } else {
+      setThumbnail(url);
+    }
   }
 
   useEffect(() => {
@@ -109,31 +153,31 @@ export default function Drivers() {
         try {
           const r: any = await getFileUrl(d.aadharUrl);
           const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
-          setAadharPreview(url || null);
+          await setAttachmentPreview(d.aadharUrl, url || null, setAadharPreviewUrl, setAadharThumbnail);
           setAadharLabel((d.aadharUrl || "").split('/').pop() || "");
         } catch (err) { console.debug("aadhar preview err", err); }
       } else {
-        setAadharPreview(null); setAadharLabel("");
+        setAadharPreviewUrl(null); setAadharThumbnail(null); setAadharLabel("");
       }
       if (d.licenseAttachmentUrl) {
         try {
           const r: any = await getFileUrl(d.licenseAttachmentUrl);
           const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
-          setLicensePreview(url || null);
+          await setAttachmentPreview(d.licenseAttachmentUrl, url || null, setLicensePreviewUrl, setLicenseThumbnail);
           setLicenseFileLabel((d.licenseAttachmentUrl || "").split('/').pop() || "");
         } catch (err) { console.debug("license preview err", err); }
       } else {
-        setLicensePreview(null); setLicenseFileLabel("");
+        setLicensePreviewUrl(null); setLicenseThumbnail(null); setLicenseFileLabel("");
       }
       if (d.panUrl) {
         try {
           const r: any = await getFileUrl(d.panUrl);
           const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
-          setPanPreview(url || null);
+          await setAttachmentPreview(d.panUrl, url || null, setPanPreviewUrl, setPanThumbnail);
           setPanLabel((d.panUrl || "").split('/').pop() || "");
         } catch (err) { console.debug("pan preview err", err); }
       } else {
-        setPanPreview(null); setPanLabel("");
+        setPanPreviewUrl(null); setPanThumbnail(null); setPanLabel("");
       }
     })();
 
@@ -200,7 +244,13 @@ export default function Drivers() {
     try {
       await uploadFile(key, f);
       setForm(v => ({ ...v, aadharUrl: key }));
-      try { const r: any = await getFileUrl(key); const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl); setAadharPreview(url||null); } catch {}
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        await setAttachmentPreview(key, url||null, setAadharPreviewUrl, setAadharThumbnail);
+      } catch (previewErr) {
+        console.debug('aadhar preview err', previewErr);
+      }
       showUploadStatus("Aadhar uploaded successfully", "success");
     } catch (err) { console.error('aadhar upload', err); showUploadStatus(`Aadhar upload failed: ${getErrorMessage(err)}`, "error"); }
     finally { setAadharUploading(false); }
@@ -217,7 +267,13 @@ export default function Drivers() {
     try {
       await uploadFile(key, f);
       setForm(v => ({ ...v, licenseAttachmentUrl: key }));
-      try { const r: any = await getFileUrl(key); const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl); setLicensePreview(url||null); } catch {}
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        await setAttachmentPreview(key, url||null, setLicensePreviewUrl, setLicenseThumbnail);
+      } catch (previewErr) {
+        console.debug('license preview err', previewErr);
+      }
       showUploadStatus("License uploaded successfully", "success");
     } catch (err) { console.error('license upload', err); showUploadStatus(`License upload failed: ${getErrorMessage(err)}`, "error"); }
     finally { setLicenseUploading(false); }
@@ -234,7 +290,13 @@ export default function Drivers() {
     try {
       await uploadFile(key, f);
       setForm(v => ({ ...v, panUrl: key }));
-      try { const r: any = await getFileUrl(key); const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl); setPanPreview(url||null); } catch {}
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        await setAttachmentPreview(key, url||null, setPanPreviewUrl, setPanThumbnail);
+      } catch (previewErr) {
+        console.debug('pan preview err', previewErr);
+      }
       showUploadStatus("PAN uploaded successfully", "success");
     } catch (err) { console.error('pan upload', err); showUploadStatus(`PAN upload failed: ${getErrorMessage(err)}`, "error"); }
     finally { setPanUploading(false); }
@@ -420,9 +482,9 @@ export default function Drivers() {
                               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: aadharLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{aadharLabel || 'No file'}</div>
                               <button type="button" onClick={() => aadharInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{aadharUploading ? 'Uploading…' : (aadharLabel ? 'Replace' : 'Upload')}</button>
                             </div>
-                            {aadharPreview ? (
+                            {aadharThumbnail ? (
                               <div style={{ marginTop: 8 }}>
-                                <img src={aadharPreview} alt="aadhar" onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(aadharPreview, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} />
+                                <img src={aadharThumbnail} alt="aadhar" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (aadharPreviewUrl) window.open(aadharPreviewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} />
                               </div>
                             ) : null}
                           </div>
@@ -440,7 +502,7 @@ export default function Drivers() {
                               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: licenseFileLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{licenseFileLabel || 'No file'}</div>
                               <button type="button" onClick={() => licenseFileInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{licenseUploading ? 'Uploading…' : (licenseFileLabel ? 'Replace' : 'Upload')}</button>
                             </div>
-                            {licensePreview ? <div style={{ marginTop: 8 }}><img src={licensePreview} alt="license" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); window.open(licensePreview, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+                            {licenseThumbnail ? <div style={{ marginTop: 8 }}><img src={licenseThumbnail} alt="license" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (licensePreviewUrl) window.open(licensePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
                           </div>
                         </div>
 
@@ -456,7 +518,7 @@ export default function Drivers() {
                               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: panLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{panLabel || 'No file'}</div>
                               <button type="button" onClick={() => panInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{panUploading ? 'Uploading…' : (panLabel ? 'Replace' : 'Upload')}</button>
                             </div>
-                            {panPreview ? <div style={{ marginTop: 8 }}><img src={panPreview} alt="pan" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); window.open(panPreview, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+                            {panThumbnail ? <div style={{ marginTop: 8 }}><img src={panThumbnail} alt="pan" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (panPreviewUrl) window.open(panPreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
                           </div>
                         </div>
                       </div>
