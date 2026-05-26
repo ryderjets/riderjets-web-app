@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { generateClient } from "aws-amplify/data";
+import { uploadFile, getFileUrl } from "../lib/storage";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, Clock, ShieldCheck, ShieldAlert, User, Pencil } from "lucide-react";
 import type { Schema } from "../../amplify/data/resource";
@@ -19,7 +20,7 @@ const VEHICLE_LABELS: Record<string, string> = {
   SMALL_TRUCK: "Small Truck", LARGE_TRUCK: "Large Truck", OTHER: "Other",
 };
 
-const empty = { name: "", phone: "+91 ", vehicleType: "TATA_ACE", preferredVendor: "", address: "", licenseNumber: "", licenseExpiry: "", notes: "" };
+const empty = { name: "", phone: "+91 ", vehicleType: "TATA_ACE", preferredVendor: "", address: "", aadharNumber: "", aadharUrl: "", licenseNumber: "", licenseAttachmentUrl: "", licenseExpiry: "", panNumber: "", panUrl: "", notes: "" };
 
 export default function Drivers() {
   const [drivers, setDrivers]   = useState<Driver[]>([]);
@@ -29,6 +30,48 @@ export default function Drivers() {
   const [form, setForm]         = useState({ ...empty });
   const [saving, setSaving]     = useState(false);
   const licenseInputRef = useRef<HTMLInputElement | null>(null);
+
+  // File input refs
+  const aadharInputRef = useRef<HTMLInputElement | null>(null);
+  const licenseFileInputRef = useRef<HTMLInputElement | null>(null);
+  const panInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Attachment states
+  const [aadharLabel, setAadharLabel] = useState<string>("");
+  const [aadharUploading, setAadharUploading] = useState(false);
+  const [aadharPreview, setAadharPreview] = useState<string | null>(null);
+
+  const [licenseFileLabel, setLicenseFileLabel] = useState<string>("");
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [licensePreview, setLicensePreview] = useState<string | null>(null);
+
+  const [panLabel, setPanLabel] = useState<string>("");
+  const [panUploading, setPanUploading] = useState(false);
+  const [panPreview, setPanPreview] = useState<string | null>(null);
+
+  const [uploadStatusMessage, setUploadStatusMessage] = useState<string>("");
+  const [uploadStatusType, setUploadStatusType] = useState<"success" | "error" | "info">("info");
+  const uploadStatusTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
+    };
+  }, []);
+
+  function getErrorMessage(err: unknown) {
+    if (!err) return "Unknown error";
+    if (typeof err === "string") return err;
+    if (err instanceof Error) return err.message;
+    try { return JSON.stringify(err); } catch { return "Unknown error"; }
+  }
+
+  function showUploadStatus(message: string, type: "success" | "error" | "info" = "success") {
+    setUploadStatusMessage(message);
+    setUploadStatusType(type);
+    if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
+    uploadStatusTimer.current = window.setTimeout(() => setUploadStatusMessage(""), 3000);
+  }
 
   useEffect(() => {
     const sub = client.models.Driver.observeQuery({ authMode: "apiKey" }).subscribe({
@@ -50,10 +93,50 @@ export default function Drivers() {
       vehicleType: d.vehicleType ?? "TATA_ACE",
       preferredVendor: d.preferredVendor ?? "",
       address: d.address ?? "",
+      aadharNumber: d.aadharNumber ?? "",
+      aadharUrl: d.aadharUrl ?? "",
       licenseNumber: d.licenseNumber ?? "",
+      licenseAttachmentUrl: d.licenseAttachmentUrl ?? "",
       licenseExpiry: normalizeDateForInput(d.licenseExpiry),
+      panNumber: d.panNumber ?? "",
+      panUrl: d.panUrl ?? "",
       notes: d.notes ?? "",
     });
+
+    // prefetch attachment previews if present
+    (async () => {
+      if (d.aadharUrl) {
+        try {
+          const r: any = await getFileUrl(d.aadharUrl);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          setAadharPreview(url || null);
+          setAadharLabel((d.aadharUrl || "").split('/').pop() || "");
+        } catch (err) { console.debug("aadhar preview err", err); }
+      } else {
+        setAadharPreview(null); setAadharLabel("");
+      }
+      if (d.licenseAttachmentUrl) {
+        try {
+          const r: any = await getFileUrl(d.licenseAttachmentUrl);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          setLicensePreview(url || null);
+          setLicenseFileLabel((d.licenseAttachmentUrl || "").split('/').pop() || "");
+        } catch (err) { console.debug("license preview err", err); }
+      } else {
+        setLicensePreview(null); setLicenseFileLabel("");
+      }
+      if (d.panUrl) {
+        try {
+          const r: any = await getFileUrl(d.panUrl);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          setPanPreview(url || null);
+          setPanLabel((d.panUrl || "").split('/').pop() || "");
+        } catch (err) { console.debug("pan preview err", err); }
+      } else {
+        setPanPreview(null); setPanLabel("");
+      }
+    })();
+
     setShowDialog(true);
   }
 
@@ -69,8 +152,13 @@ export default function Drivers() {
         vehicleType: form.vehicleType as Driver["vehicleType"],
         preferredVendor: form.preferredVendor,
         address: form.address,
+        aadharNumber: form.aadharNumber || undefined,
+        aadharUrl: form.aadharUrl || undefined,
         licenseNumber: form.licenseNumber,
+        licenseAttachmentUrl: form.licenseAttachmentUrl || undefined,
         licenseExpiry: form.licenseExpiry || undefined,
+        panNumber: form.panNumber || undefined,
+        panUrl: form.panUrl || undefined,
         notes: form.notes,
         updatedDate: new Date().toISOString(),
       }, { authMode: "apiKey" });
@@ -80,8 +168,13 @@ export default function Drivers() {
         vehicleType: form.vehicleType as Driver["vehicleType"],
         preferredVendor: form.preferredVendor,
         address: form.address,
+        aadharNumber: form.aadharNumber || undefined,
+        aadharUrl: form.aadharUrl || undefined,
         licenseNumber: form.licenseNumber,
+        licenseAttachmentUrl: form.licenseAttachmentUrl || undefined,
         licenseExpiry: form.licenseExpiry || undefined,
+        panNumber: form.panNumber || undefined,
+        panUrl: form.panUrl || undefined,
         notes: form.notes,
         vettingStatus: "PENDING_REVIEW",
         isAvailable: true,
@@ -93,6 +186,58 @@ export default function Drivers() {
 
   async function updateVetting(id: string, vettingStatus: VettingStatus) {
     await client.models.Driver.update({ id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
+  }
+
+  // Handlers for attachments
+  async function handleAadharFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return; setAadharUploading(true); showUploadStatus("Uploading Aadhar...", "info");
+    const selectedFileName = f.name; setAadharLabel(selectedFileName);
+    const MAX = 10 * 1024 * 1024; if (f.size > MAX) { setAadharUploading(false); showUploadStatus("Aadhar file is too large", "error"); return; }
+    const baseKey = editTarget?.id || form.licenseNumber || `driver-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = selectedFileName.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `drivers/${safeBase}/aadhar_${Date.now()}_${safeFile}`;
+    try {
+      await uploadFile(key, f);
+      setForm(v => ({ ...v, aadharUrl: key }));
+      try { const r: any = await getFileUrl(key); const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl); setAadharPreview(url||null); } catch {}
+      showUploadStatus("Aadhar uploaded successfully", "success");
+    } catch (err) { console.error('aadhar upload', err); showUploadStatus(`Aadhar upload failed: ${getErrorMessage(err)}`, "error"); }
+    finally { setAadharUploading(false); }
+  }
+
+  async function handleLicenseFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return; setLicenseUploading(true); showUploadStatus("Uploading license attachment...", "info");
+    const selectedFileName = f.name; setLicenseFileLabel(selectedFileName);
+    const MAX = 10 * 1024 * 1024; if (f.size > MAX) { setLicenseUploading(false); showUploadStatus("License file is too large", "error"); return; }
+    const baseKey = editTarget?.id || form.licenseNumber || `driver-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = selectedFileName.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `drivers/${safeBase}/license_${Date.now()}_${safeFile}`;
+    try {
+      await uploadFile(key, f);
+      setForm(v => ({ ...v, licenseAttachmentUrl: key }));
+      try { const r: any = await getFileUrl(key); const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl); setLicensePreview(url||null); } catch {}
+      showUploadStatus("License uploaded successfully", "success");
+    } catch (err) { console.error('license upload', err); showUploadStatus(`License upload failed: ${getErrorMessage(err)}`, "error"); }
+    finally { setLicenseUploading(false); }
+  }
+
+  async function handlePanFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return; setPanUploading(true); showUploadStatus("Uploading PAN attachment...", "info");
+    const selectedFileName = f.name; setPanLabel(selectedFileName);
+    const MAX = 10 * 1024 * 1024; if (f.size > MAX) { setPanUploading(false); showUploadStatus("PAN file is too large", "error"); return; }
+    const baseKey = editTarget?.id || form.licenseNumber || `driver-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = selectedFileName.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `drivers/${safeBase}/pan_${Date.now()}_${safeFile}`;
+    try {
+      await uploadFile(key, f);
+      setForm(v => ({ ...v, panUrl: key }));
+      try { const r: any = await getFileUrl(key); const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl); setPanPreview(url||null); } catch {}
+      showUploadStatus("PAN uploaded successfully", "success");
+    } catch (err) { console.error('pan upload', err); showUploadStatus(`PAN upload failed: ${getErrorMessage(err)}`, "error"); }
+    finally { setPanUploading(false); }
   }
 
   function normalizeDateForInput(v?: string | null): string {
@@ -234,7 +379,12 @@ export default function Drivers() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <Row2>
+                    {uploadStatusMessage ? (
+                      <div style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, background: uploadStatusType === 'success' ? 'rgba(16,185,129,0.12)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)', color: uploadStatusType === 'success' ? '#047857' : uploadStatusType === 'error' ? '#b91c1c' : '#1d4ed8', border: `1px solid ${uploadStatusType === 'success' ? 'rgba(16,185,129,0.28)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.28)' : 'rgba(59,130,246,0.28)'}` }}>
+                        {uploadStatusMessage}
+                      </div>
+                    ) : null}
+                    <Row2>
                         <Field label="Full Name *"><input required value={form.name} onChange={set("name")} style={inp} /></Field>
                         <Field label="Phone *"><input required value={form.phone} onChange={set("phone")} style={inp} /></Field>
                       </Row2>
@@ -249,16 +399,68 @@ export default function Drivers() {
                       <Row2>
                         <Field label="Preferred routes"><input value={form.preferredVendor} onChange={set("preferredVendor")} style={inp} /></Field>
                       </Row2>
-                      <Row2>
-                        <Field label="License Number"><input value={form.licenseNumber} onChange={set("licenseNumber")} style={inp} /></Field>
-                        <Field label="License Expiry">
+                      <Field label="License Expiry">
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input ref={licenseInputRef} type="date" value={form.licenseExpiry} onChange={set("licenseExpiry")} style={{ ...inp, flex: 1 }} />
+                          <button type="button" onClick={() => { licenseInputRef.current?.showPicker?.(); licenseInputRef.current?.focus(); }}
+                            aria-label="Open date picker" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>📅</button>
+                        </div>
+                      </Field>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        {/* Aadhar */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Aadhar</label>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <input ref={licenseInputRef} type="date" value={form.licenseExpiry} onChange={set("licenseExpiry")} style={{ ...inp, flex: 1 }} />
-                            <button type="button" onClick={() => { licenseInputRef.current?.showPicker?.(); licenseInputRef.current?.focus(); }}
-                              aria-label="Open date picker" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>📅</button>
+                            <input value={form.aadharNumber} onChange={set('aadharNumber')} placeholder="Aadhar number" style={inp} />
                           </div>
-                        </Field>
-                      </Row2>
+                          <div style={{ marginTop: 8 }}>
+                            <input ref={aadharInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleAadharFile} />
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: aadharLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{aadharLabel || 'No file'}</div>
+                              <button type="button" onClick={() => aadharInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{aadharUploading ? 'Uploading…' : (aadharLabel ? 'Replace' : 'Upload')}</button>
+                            </div>
+                            {aadharPreview ? (
+                              <div style={{ marginTop: 8 }}>
+                                <img src={aadharPreview} alt="aadhar" onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(aadharPreview, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} />
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Driver License */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Driver License</label>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <input required value={form.licenseNumber} onChange={set('licenseNumber')} placeholder="License number" style={inp} />
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <input ref={licenseFileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleLicenseFile} />
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: licenseFileLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{licenseFileLabel || 'No file'}</div>
+                              <button type="button" onClick={() => licenseFileInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{licenseUploading ? 'Uploading…' : (licenseFileLabel ? 'Replace' : 'Upload')}</button>
+                            </div>
+                            {licensePreview ? <div style={{ marginTop: 8 }}><img src={licensePreview} alt="license" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); window.open(licensePreview, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+                          </div>
+                        </div>
+
+                        {/* PAN */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>PAN</label>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <input value={form.panNumber} onChange={set('panNumber')} placeholder="PAN number" style={inp} />
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <input ref={panInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handlePanFile} />
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: panLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{panLabel || 'No file'}</div>
+                              <button type="button" onClick={() => panInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{panUploading ? 'Uploading…' : (panLabel ? 'Replace' : 'Upload')}</button>
+                            </div>
+                            {panPreview ? <div style={{ marginTop: 8 }}><img src={panPreview} alt="pan" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); window.open(panPreview, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+                          </div>
+                        </div>
+                      </div>
+
                       <Field label="Notes"><textarea value={form.notes} onChange={set("notes")} rows={2} style={{ ...inp, resize: 'vertical' }} /></Field>
                       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
                         <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
@@ -285,7 +487,7 @@ export default function Drivers() {
                         <Field label="Preferred routes"><input value={form.preferredVendor} onChange={set("preferredVendor")} style={inp} /></Field>
                       </Row2>
                   <Row2>
-                    <Field label="License Number"><input value={form.licenseNumber} onChange={set("licenseNumber")} style={inp} /></Field>
+                    <Field label="License Number"><input required value={form.licenseNumber} onChange={set("licenseNumber")} style={inp} /></Field>
                     <Field label="License Expiry">
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <input ref={licenseInputRef} type="date" value={form.licenseExpiry} onChange={set("licenseExpiry")} style={{ ...inp, flex: 1 }} />

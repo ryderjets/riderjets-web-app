@@ -15,5 +15,8 @@ export const storage = defineStorage({
     'pods/*': [
       allow.authenticated.to(['read', 'write', 'delete']),
     ],
+    'drivers/*': [
+      allow.authenticated.to(['read', 'write', 'delete']),
+    ],
   })
 });
