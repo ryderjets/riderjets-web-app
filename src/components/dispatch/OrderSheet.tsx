@@ -66,6 +66,10 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+
+  function getFileLabelFromKey(key: string) {
+    return key.split("/").pop() || key;
+  }
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState<number>(0);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -110,11 +114,39 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
         podUrl:          trip.podUrl ?? "",
         podKind:         (trip.podKind ?? "NONE") as TripInput["podKind"],
       });
-      setFileLabel(trip.podKind === "UPLOAD" ? (trip.podUrl ?? "") : "");
+      setFileLabel(trip.podKind === "UPLOAD" && trip.podUrl ? getFileLabelFromKey(trip.podUrl) : "");
+      setPreviewUrl(null);
+      setGalleryUrls([]);
+      setShowPreview(false);
+      setUploadSuccess(false);
+      setUploadError(null);
+
+      if (trip.podKind === "UPLOAD" && trip.podUrl) {
+        (async () => {
+          try {
+            const res: any = await getFileUrl(trip.podUrl);
+            let url: string | null = null;
+            if (typeof res === "string") url = res;
+            else if (res?.url) url = String(res.url);
+            else if (res?.signedUrl) url = String(res.signedUrl);
+            else if (res?.presignedUrl) url = String(res.presignedUrl);
+            else if (res?.getUrl) url = String(res.getUrl);
+            setPreviewUrl(url);
+          } catch (err) {
+            console.debug("Could not get preview URL for existing upload", err);
+          }
+        })();
+      }
     } else {
       // New order — generate number async
       const base = { ...empty };
       setForm(base);
+      setFileLabel("");
+      setPreviewUrl(null);
+      setGalleryUrls([]);
+      setShowPreview(false);
+      setUploadSuccess(false);
+      setUploadError(null);
       generateOrderNumber().then((n) => setForm((f) => ({ ...f, orderNumber: n })));
     }
   }, [trip, open]);
