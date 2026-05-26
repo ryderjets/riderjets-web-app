@@ -2,47 +2,49 @@ import { uploadData, getUrl, remove, list } from '@aws-amplify/storage';
 
 /**
  * Upload a file to Amplify Storage (S3).
- * @param key - object key (e.g. `pods/orders/123.jpg`)
+ * @param path - object path (e.g. `pods/orders/123.jpg`)
  * @param file - File | Blob | string (base64) to upload
  * @param accessLevel - access level: 'public' | 'protected' | 'private'
  */
 export async function uploadFile(
-  key: string,
-  file: File | Blob | string,
-  accessLevel: 'public' | 'protected' | 'private' = 'protected'
+  path: string,
+  file: File | Blob | string
 ) {
-  return uploadData({ key, body: file as any, accessLevel });
+  const uploadTask = uploadData({
+    path,
+    data: file as any,
+    options: {
+      contentType: file instanceof File ? file.type : undefined,
+    },
+  });
+  return uploadTask.result;
 }
 
 /**
  * Get a signed URL (or public path) for an object in Storage.
- * @param key - object key
+ * @param path - object path
  * @param expires - seconds until the signed URL expires
- * @param accessLevel - access level
  */
 export async function getFileUrl(
-  key: string,
-  expires = 3600,
-  accessLevel: 'public' | 'protected' | 'private' = 'protected'
+  path: string,
+  expires = 3600
 ) {
-  return getUrl({ key, accessLevel, expires });
+  return getUrl({ path, options: { expiresIn: expires } });
 }
 
 /**
  * Delete an object from Storage.
  */
 export async function deleteFile(
-  key: string,
-  accessLevel: 'public' | 'protected' | 'private' = 'protected'
+  path: string
 ) {
-  return remove({ key, accessLevel });
+  return remove({ path });
 }
 
 export async function listFiles(
-  path = '',
-  accessLevel: 'public' | 'protected' | 'private' = 'protected'
+  path = ''
 ) {
-  return list({ path, accessLevel });
+  return list({ path });
 }
 
 export default {

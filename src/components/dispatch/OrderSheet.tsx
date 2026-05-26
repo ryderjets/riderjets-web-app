@@ -2,6 +2,7 @@ import { X, Route, Truck, User, Building2, IndianRupee, Paperclip } from "lucide
 import { motion, AnimatePresence } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import { generateClient } from "aws-amplify/data";
+import { uploadFile, getFileUrl, listFiles, deleteFile } from "../../lib/storage";
 import type { Schema } from "../../../amplify/data/resource";
 import type { TripStatus } from "./StatusBadge";
 
@@ -59,7 +60,15 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
   const [form, setForm]         = useState<TripInput>({ ...empty, orderNumber: "" });
   const [drivers, setDrivers]   = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [podTab, setPodTab]     = useState<"URL" | "UPLOAD">("UPLOAD");
+  const [fileLabel, setFileLabel] = useState<string>("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState<number>(0);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef              = useRef<HTMLInputElement | null>(null);
 
   // Auto-generate order number: YYMM-XXXX
@@ -101,6 +110,7 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
         podUrl:          trip.podUrl ?? "",
         podKind:         (trip.podKind ?? "NONE") as TripInput["podKind"],
       });
+      setFileLabel(trip.podKind === "UPLOAD" ? (trip.podUrl ?? "") : "");
     } else {
       // New order — generate number async
       const base = { ...empty };
@@ -131,6 +141,94 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
       vehicleNumber: v.vehicleNumber,
       vehicleType:   (v.type ?? f.vehicleType) as TripInput["vehicleType"],
     }));
+  }
+
+  async function openGallery() {
+    setShowPreview(true);
+    try {
+      // Determine folder prefix to list files
+      const folder = (() => {
+        const key = form.podUrl || trip?.podUrl || '';
+        if (!key) return '';
+        const parts = key.split('/');
+        parts.pop();
+        return parts.join('/') + '/';
+      })();
+
+      const keys: string[] = [];
+      if (folder) {
+        try {
+          const res: any = await listFiles(folder);
+          // res may have .results or .items or be array
+          const items = Array.isArray(res) ? res : (res?.results ?? res?.items ?? res?.files ?? []);
+          for (const it of items) {
+            const k = it?.path ?? it?.key ?? it?.Key ?? it?.name ?? it?.filename ?? null;
+            if (k) keys.push(k);
+          }
+        } catch (err) {
+          console.debug('listFiles failed', err);
+        }
+      }
+
+      // Ensure current podUrl is included
+      const currentKey = form.podUrl || trip?.podUrl || '';
+      if (currentKey && !keys.includes(currentKey)) keys.unshift(currentKey);
+
+      // Fetch preview URLs
+      const urls: string[] = [];
+      for (const k of keys) {
+        try {
+          const r: any = await getFileUrl(k);
+          let u: string | null = null;
+          if (typeof r === 'string') u = r;
+          else if (r?.url) u = String(r.url);
+          else if (r?.signedUrl) u = String(r.signedUrl);
+          else if (r?.presignedUrl) u = String(r.presignedUrl);
+          else if (r?.getUrl) u = String(r.getUrl);
+          if (u) urls.push(u);
+        } catch (err) {
+          console.debug('getFileUrl failed for', k, err);
+        }
+      }
+
+      setGalleryUrls(urls);
+      // set index to current file if present
+      const idx = urls.findIndex(u => u === previewUrl || u.includes((currentKey || '').split('/').pop() ?? ''));
+      setGalleryIndex(idx >= 0 ? idx : 0);
+    } catch (e) {
+      console.error('openGallery error', e);
+      setGalleryUrls(previewUrl ? [previewUrl] : []);
+      setGalleryIndex(0);
+    }
+  }
+
+  async function deleteAttachment() {
+    const key = form.podUrl || trip?.podUrl || "";
+    if (!key) return;
+    setDeleting(true);
+    setUploadError(null);
+    try {
+      await deleteFile(key);
+      setForm((f) => ({ ...f, podUrl: "", podKind: "NONE" }));
+      setFileLabel("");
+      setPreviewUrl(null);
+      setGalleryUrls([]);
+      setShowPreview(false);
+      setUploadSuccess(false);
+    } catch (err) {
+      console.error("Delete failed", err);
+      setUploadError("Unable to delete attachment. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function prevInGallery() {
+    setGalleryIndex((i) => (galleryUrls.length ? (i - 1 + galleryUrls.length) % galleryUrls.length : 0));
+  }
+
+  function nextInGallery() {
+    setGalleryIndex((i) => (galleryUrls.length ? (i + 1) % galleryUrls.length : 0));
   }
 
   return (
@@ -228,27 +326,107 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
               {/* PoD */}
               <Sec icon={<Paperclip size={16} />} label="Proof of Delivery">
                 <div style={{ display: "flex", gap: 0, marginBottom: 12, borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)" }}>
-                  <button type="button" onClick={() => fileInputRef.current?.click()}
-                    style={{ flex: 1, padding: "7px", background: "hsla(243,75%,62%,0.15)", border: "none", color: "var(--primary)", cursor: "pointer", fontSize: 13 }}>
-                    Upload File
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                    style={{ flex: 1, padding: "7px", background: "hsla(243,75%,62%,0.15)", border: "none", color: "var(--primary)", cursor: uploading ? "not-allowed" : "pointer", fontSize: 13 }}>
+                    {uploading ? "Uploading…" : "Upload File"}
                   </button>
                 </div>
                 <Fld label="File">
-                  <input ref={fileInputRef} type="file" accept="image/*,.pdf" capture="environment" onChange={(e) => {
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf" capture="environment" onChange={async (e) => {
                     const f = e.target.files?.[0];
+                    setUploadError(null);
+                    setUploadSuccess(false);
                     if (!f) return;
+                    const selectedFileName = f.name;
+                    setFileLabel(selectedFileName);
                     const MAX = 10 * 1024 * 1024; // 10 MB
                     if (f.size > MAX) {
-                      alert('File too large. Please upload a file up to 10 MB.');
+                      setUploadError("File too large. Please upload a file up to 10 MB.");
                       return;
                     }
-                    setForm(v => ({ ...v, podUrl: f.name, podKind: "UPLOAD" }));
+
+                    const orderKey = trip?.id || form.orderNumber || `order-${Date.now()}`;
+                    const safeOrderKey = orderKey.replace(/[^a-zA-Z0-9_-]/g, "_");
+                    const safeFileName = selectedFileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    const fileKey = `pods/${safeOrderKey}/${Date.now()}_${safeFileName}`;
+
+                    setUploading(true);
+                    try {
+                      await uploadFile(fileKey, f);
+                      // store key in form and mark as upload
+                      setForm((v) => ({ ...v, podUrl: fileKey, podKind: "UPLOAD" }));
+                      // fetch a signed URL for preview
+                      try {
+                        const urlRes: any = await getFileUrl(fileKey);
+                        let url: string | null = null;
+                        if (typeof urlRes === 'string') url = urlRes;
+                        else if (urlRes?.url) url = String(urlRes.url);
+                        else if (urlRes?.signedUrl) url = String(urlRes.signedUrl);
+                        else if (urlRes?.presignedUrl) url = String(urlRes.presignedUrl);
+                        else if (urlRes?.getUrl) url = String(urlRes.getUrl);
+                        setPreviewUrl(url);
+                      } catch (err) {
+                        // Non-fatal: preview may not be available, still mark success
+                        console.debug("Could not get preview URL", err);
+                        setPreviewUrl(null);
+                      }
+                      setUploadSuccess(true);
+                    } catch (uploadErr) {
+                      console.error("Upload failed", uploadErr);
+                      setUploadError(`Upload failed for ${selectedFileName}. Please try again.`);
+                    } finally {
+                      setUploading(false);
+                    }
                   }} style={{ display: "none" }} />
-                  <div style={{ ...inp, padding: "12px", minHeight: 44, display: "flex", alignItems: "center", color: form.podUrl ? "var(--foreground)" : "var(--muted-foreground)" }}>
-                    {form.podUrl || "Choose a file by clicking Upload File above."}
+                  <div style={{ ...inp, padding: "12px", minHeight: 44, display: "flex", alignItems: "center", color: fileLabel ? "var(--foreground)" : "var(--muted-foreground)" }}>
+                    {fileLabel || "Choose a file by clicking Upload File above."}
                   </div>
+                  {uploadError ? <div style={{ marginTop: 6, color: "hsl(0,80%,50%)", fontSize: 13 }}>{uploadError}</div> : null}
+                  {uploading ? <div style={{ marginTop: 6, color: "var(--muted-foreground)", fontSize: 13 }}>Uploading file…</div> : null}
+                  {deleting ? <div style={{ marginTop: 6, color: "var(--muted-foreground)", fontSize: 13 }}>Deleting attachment…</div> : null}
+                  {uploadSuccess ? <div style={{ marginTop: 6, color: "hsl(140,60%,35%)", fontSize: 13 }}>File added to the Order</div> : null}
+                  {previewUrl ? (
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <img src={previewUrl} alt="preview" onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(previewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: "pointer", borderRadius: 6, objectFit: "cover" }} />
+                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteAttachment(); }} aria-label="Delete attachment"
+                          style={{ position: 'absolute', top: -8, right: -8, width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)', cursor: deleting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); fileInputRef.current?.click(); }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>Replace</button>
+                    </div>
+                  ) : null}
                 </Fld>
               </Sec>
+
+              {/* Preview modal */}
+              <AnimatePresence>
+                {showPreview && galleryUrls.length > 0 && (
+                  <>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowPreview(false)}
+                      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)" }} />
+                    <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }}
+                      style={{ position: "fixed", left: "50%", top: "50%", transform: "translate(-50%,-50%)", zIndex: 301, maxWidth: "90%", maxHeight: "90%", background: "var(--card)", padding: 12, borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ position: 'absolute', right: 12, top: 12 }}>
+                        <button onClick={() => setShowPreview(false)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <button type="button" onClick={() => prevInGallery()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8 }} aria-label="Previous">◀</button>
+                        <div style={{ maxHeight: '80vh', overflow: 'auto' }}>
+                          {galleryUrls[galleryIndex].toLowerCase().endsWith('.pdf') ? (
+                            <iframe src={galleryUrls[galleryIndex]} title="preview" style={{ width: '80vw', height: '80vh', border: 'none' }} />
+                          ) : (
+                            <img src={galleryUrls[galleryIndex]} alt={`preview-${galleryIndex}`} style={{ maxWidth: '80vw', maxHeight: '80vh', display: 'block' }} />
+                          )}
+                        </div>
+                        <button type="button" onClick={() => nextInGallery()} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8 }} aria-label="Next">▶</button>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
 
               {/* Notes */}
               <Sec icon={<Paperclip size={16} />} label="Notes">

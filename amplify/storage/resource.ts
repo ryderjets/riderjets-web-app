@@ -12,5 +12,8 @@ export const storage = defineStorage({
       allow.authenticated.to(['read','write']),
       allow.guest.to(['read', 'write'])
     ],
+    'pods/*': [
+      allow.authenticated.to(['read', 'write', 'delete']),
+    ],
   })
 });
