@@ -33,7 +33,7 @@ export default function Dispatch({ onSignOut, onNavChange }: Props) {
   const [sheetOpen, setSheetOpen]   = useState(false);
   const [editTrip, setEditTrip]     = useState<Trip | null>(null);
   const [page, setPage]             = useState(0);
-  const [timeline, setTimeline]     = useState<TimelineFilter>("today");
+  const [timeline, setTimeline]     = useState<TimelineFilter>("month");
   const PAGE_SIZE = 25;
 
   useEffect(() => {
