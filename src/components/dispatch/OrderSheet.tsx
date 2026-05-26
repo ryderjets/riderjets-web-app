@@ -1,6 +1,6 @@
 import { X, Route, Truck, User, Building2, IndianRupee, Paperclip } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "../../../amplify/data/resource";
 import type { TripStatus } from "./StatusBadge";
@@ -59,7 +59,8 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
   const [form, setForm]         = useState<TripInput>({ ...empty, orderNumber: "" });
   const [drivers, setDrivers]   = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [podTab, setPodTab]     = useState<"URL" | "UPLOAD">("URL");
+  const [podTab, setPodTab]     = useState<"URL" | "UPLOAD">("UPLOAD");
+  const fileInputRef              = useRef<HTMLInputElement | null>(null);
 
   // Auto-generate order number: YYMM-XXXX
   async function generateOrderNumber(): Promise<string> {
@@ -227,17 +228,26 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
               {/* PoD */}
               <Sec icon={<Paperclip size={16} />} label="Proof of Delivery">
                 <div style={{ display: "flex", gap: 0, marginBottom: 12, borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)" }}>
-                  {(["URL", "UPLOAD"] as const).map((t) => (
-                    <button key={t} type="button" onClick={() => { setPodTab(t); setForm(f => ({ ...f, podKind: t })); }}
-                      style={{ flex: 1, padding: "7px", background: podTab === t ? "hsla(243,75%,62%,0.15)" : "var(--accent)", border: "none", color: podTab === t ? "var(--primary)" : "var(--muted-foreground)", cursor: "pointer", fontSize: 13 }}>
-                      {t === "URL" ? "Paste URL" : "Upload File"}
-                    </button>
-                  ))}
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    style={{ flex: 1, padding: "7px", background: "hsla(243,75%,62%,0.15)", border: "none", color: "var(--primary)", cursor: "pointer", fontSize: 13 }}>
+                    Upload File
+                  </button>
                 </div>
-                {podTab === "URL"
-                  ? <Fld label="PoD URL"><input type="url" value={form.podUrl} onChange={set("podUrl")} placeholder="https://…" style={inp} /></Fld>
-                  : <Fld label="File"><input type="file" accept="image/*,.pdf" capture="environment" onChange={(e) => { const f = e.target.files?.[0]; if (f) setForm(v => ({ ...v, podUrl: f.name, podKind: "UPLOAD" })); }} style={{ ...inp, padding: "7px 12px" }} /></Fld>
-                }
+                <Fld label="File">
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf" capture="environment" onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const MAX = 10 * 1024 * 1024; // 10 MB
+                    if (f.size > MAX) {
+                      alert('File too large. Please upload a file up to 10 MB.');
+                      return;
+                    }
+                    setForm(v => ({ ...v, podUrl: f.name, podKind: "UPLOAD" }));
+                  }} style={{ display: "none" }} />
+                  <div style={{ ...inp, padding: "12px", minHeight: 44, display: "flex", alignItems: "center", color: form.podUrl ? "var(--foreground)" : "var(--muted-foreground)" }}>
+                    {form.podUrl || "Choose a file by clicking Upload File above."}
+                  </div>
+                </Fld>
               </Sec>
 
               {/* Notes */}

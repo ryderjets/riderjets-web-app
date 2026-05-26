@@ -31,7 +31,6 @@ function getPriorWindow(timeline: TimelineFilter): { start: string; end: string;
       return { start: dateStr(start), end: dateStr(end), label: "vs prev 7 days" };
     }
     case "month": {
-      // prior = same month last year? No — prior calendar month
       const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const end   = new Date(now.getFullYear(), now.getMonth(), 0);
       return { start: dateStr(start), end: dateStr(end), label: "vs last month" };
@@ -40,6 +39,24 @@ function getPriorWindow(timeline: TimelineFilter): { start: string; end: string;
       const end = new Date(now); end.setDate(end.getDate() - 30);
       const start = new Date(end); start.setDate(start.getDate() - 30);
       return { start: dateStr(start), end: dateStr(end), label: "vs prev 30 days" };
+    }
+    case "last90": {
+      const end = new Date(now); end.setDate(end.getDate() - 90);
+      const start = new Date(end); start.setDate(start.getDate() - 90);
+      return { start: dateStr(start), end: dateStr(end), label: "vs prev 90 days" };
+    }
+    case "last365": {
+      const end = new Date(now); end.setDate(end.getDate() - 365);
+      const start = new Date(end); start.setDate(start.getDate() - 365);
+      return { start: dateStr(start), end: dateStr(end), label: "vs prev year" };
+    }
+    case "all": {
+      const start = new Date(now); start.setFullYear(start.getFullYear() - 1);
+      return { start: dateStr(start), end: dateStr(now), label: "vs prior year" };
+    }
+    default: {
+      const d = new Date(now); d.setDate(d.getDate() - 1);
+      return { start: dateStr(d), end: dateStr(d), label: "vs yesterday" };
     }
   }
 }

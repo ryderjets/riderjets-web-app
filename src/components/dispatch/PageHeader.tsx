@@ -1,13 +1,16 @@
 import { Plus, Home, ChevronRight, CalendarRange } from "lucide-react";
 import { motion } from "framer-motion";
 
-export type TimelineFilter = "today" | "last7" | "month" | "last30";
+export type TimelineFilter = "today" | "last7" | "month" | "last30" | "last90" | "last365" | "all";
 
 const TIMELINE_OPTIONS: { value: TimelineFilter; label: string }[] = [
   { value: "today",  label: "Today" },
   { value: "last7",  label: "Last 7 Days" },
   { value: "month",  label: "This Month" },
   { value: "last30", label: "Last 30 Days" },
+  { value: "last90", label: "Last 90 Days" },
+  { value: "last365", label: "Last Year" },
+  { value: "all", label: "All Orders" },
 ];
 
 interface Props {

@@ -85,7 +85,10 @@ export default function Dispatch({ onSignOut, onNavChange }: Props) {
     const cutoff = new Date(now);
     if (timeline === "last7")  cutoff.setDate(now.getDate() - 7);
     if (timeline === "last30") cutoff.setDate(now.getDate() - 30);
+    if (timeline === "last90") cutoff.setDate(now.getDate() - 90);
+    if (timeline === "last365") cutoff.setDate(now.getDate() - 365);
     if (timeline === "month")  cutoff.setDate(1);
+    if (timeline === "all") return trips;
     const cutoffStr = cutoff.toISOString().split("T")[0];
     return trips.filter((t) => (t.transactionDate ?? "") >= cutoffStr);
   }
