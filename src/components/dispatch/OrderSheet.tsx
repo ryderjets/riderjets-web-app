@@ -2,7 +2,7 @@ import { X, Route, Truck, User, Building2, IndianRupee, Paperclip } from "lucide
 import { motion, AnimatePresence } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import { generateClient } from "aws-amplify/data";
-import { uploadFile, getFileUrl, listFiles, deleteFile } from "../../lib/storage";
+import { uploadFile, getFileUrl, deleteFile } from "../../lib/storage";
 import type { Schema } from "../../../amplify/data/resource";
 import type { TripStatus } from "./StatusBadge";
 
@@ -72,8 +72,11 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  function getFileLabelFromKey(key: string) {
-    return key.split("/").pop() || key;
+  function getFileLabelFromKey(key?: string | null) {
+    const k = key ?? "";
+    const parts = k.split("/");
+    const last = parts.pop() || "";
+    return last;
   }
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState<number>(0);
@@ -129,7 +132,9 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
       if (trip.podKind === "UPLOAD" && trip.podUrl) {
         (async () => {
           try {
-            const res: any = await getFileUrl(trip.podUrl);
+            const p = trip.podUrl ?? "";
+            if (!p) return;
+            const res: any = await getFileUrl(p);
             let url: string | null = null;
             if (typeof res === "string") url = res;
             else if (res?.url) url = String(res.url);
@@ -180,64 +185,7 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
     }));
   }
 
-  async function openGallery() {
-    setShowPreview(true);
-    try {
-      // Determine folder prefix to list files
-      const folder = (() => {
-        const key = form.podUrl || trip?.podUrl || '';
-        if (!key) return '';
-        const parts = key.split('/');
-        parts.pop();
-        return parts.join('/') + '/';
-      })();
-
-      const keys: string[] = [];
-      if (folder) {
-        try {
-          const res: any = await listFiles(folder);
-          // res may have .results or .items or be array
-          const items = Array.isArray(res) ? res : (res?.results ?? res?.items ?? res?.files ?? []);
-          for (const it of items) {
-            const k = it?.path ?? it?.key ?? it?.Key ?? it?.name ?? it?.filename ?? null;
-            if (k) keys.push(k);
-          }
-        } catch (err) {
-          console.debug('listFiles failed', err);
-        }
-      }
-
-      // Ensure current podUrl is included
-      const currentKey = form.podUrl || trip?.podUrl || '';
-      if (currentKey && !keys.includes(currentKey)) keys.unshift(currentKey);
-
-      // Fetch preview URLs
-      const urls: string[] = [];
-      for (const k of keys) {
-        try {
-          const r: any = await getFileUrl(k);
-          let u: string | null = null;
-          if (typeof r === 'string') u = r;
-          else if (r?.url) u = String(r.url);
-          else if (r?.signedUrl) u = String(r.signedUrl);
-          else if (r?.presignedUrl) u = String(r.presignedUrl);
-          else if (r?.getUrl) u = String(r.getUrl);
-          if (u) urls.push(u);
-        } catch (err) {
-          console.debug('getFileUrl failed for', k, err);
-        }
-      }
-
-      setGalleryUrls(urls);
-      // set index to current file if present
-      const idx = urls.findIndex(u => u === previewUrl || u.includes((currentKey || '').split('/').pop() ?? ''));
-      setGalleryIndex(idx >= 0 ? idx : 0);
-    } catch (e) {
-      console.error('openGallery error', e);
-      setGalleryUrls(previewUrl ? [previewUrl] : []);
-      setGalleryIndex(0);
-    }
-  }
+  // Note: gallery preview population removed — thumbnails now open in new tab.
 
   async function deleteAttachment() {
     const key = form.podUrl || trip?.podUrl || "";
