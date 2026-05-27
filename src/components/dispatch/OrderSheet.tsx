@@ -310,12 +310,6 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
 
               {/* PoD */}
               <Sec icon={<Paperclip size={16} />} label="Proof of Delivery">
-                <div style={{ display: "flex", gap: 0, marginBottom: 12, borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--border)" }}>
-                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                    style={{ flex: 1, padding: "7px", background: "hsla(243,75%,62%,0.15)", border: "none", color: "var(--primary)", cursor: uploading ? "not-allowed" : "pointer", fontSize: 13 }}>
-                    {uploading ? "Uploading…" : "Upload File"}
-                  </button>
-                </div>
                 <Fld label="File">
                   <input ref={fileInputRef} type="file" accept="image/*,.pdf" capture="environment" onChange={async (e) => {
                     const f = e.target.files?.[0];
@@ -363,15 +357,21 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
                       setUploading(false);
                     }
                   }} style={{ display: "none" }} />
-                  <div style={{ ...inp, padding: "12px", minHeight: 44, display: "flex", alignItems: "center", color: fileLabel ? "var(--foreground)" : "var(--muted-foreground)" }}>
-                    {fileLabel || "Choose a file by clicking Upload File above."}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ ...inp, padding: 8, minHeight: 44, display: "flex", alignItems: "center", color: fileLabel ? "var(--foreground)" : "var(--muted-foreground)" }}>
+                      {fileLabel || "No file"}
+                    </div>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: uploading ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+                      {uploading ? "Uploading…" : (fileLabel ? "Replace" : "Upload")}
+                    </button>
                   </div>
                   {uploadError ? <div style={{ marginTop: 6, color: "hsl(0,80%,50%)", fontSize: 13 }}>{uploadError}</div> : null}
                   {uploading ? <div style={{ marginTop: 6, color: "var(--muted-foreground)", fontSize: 13 }}>Uploading file…</div> : null}
                   {deleting ? <div style={{ marginTop: 6, color: "var(--muted-foreground)", fontSize: 13 }}>Deleting attachment…</div> : null}
                   {uploadSuccess ? <div style={{ marginTop: 6, color: "hsl(140,60%,35%)", fontSize: 13 }}>File added to the Order</div> : null}
                   {previewUrl ? (
-                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ marginTop: 8 }}>
                       <div style={{ position: 'relative', display: 'inline-block' }}>
                         <img src={previewUrl} alt="preview" onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(previewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: "pointer", borderRadius: 6, objectFit: "cover" }} />
                         <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteAttachment(); }} aria-label="Delete attachment"
@@ -379,7 +379,6 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
                           <X size={14} />
                         </button>
                       </div>
-                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); fileInputRef.current?.click(); }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>Replace</button>
                     </div>
                   ) : null}
                 </Fld>

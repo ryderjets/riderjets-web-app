@@ -489,7 +489,7 @@ export default function Drivers() {
                             <input ref={aadharInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleAadharFile} />
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: aadharLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{aadharLabel || 'No file'}</div>
-                              <button type="button" onClick={() => aadharInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{aadharUploading ? 'Uploading…' : (aadharLabel ? 'Replace' : 'Upload')}</button>
+                              <button type="button" onClick={() => aadharInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{aadharUploading ? 'Uploading…' : (aadharLabel ? 'Replace' : 'Upload')}</button>
                             </div>
                             {aadharThumbnail ? (
                               <div style={{ marginTop: 8 }}>
@@ -509,7 +509,7 @@ export default function Drivers() {
                             <input ref={licenseFileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleLicenseFile} />
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: licenseFileLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{licenseFileLabel || 'No file'}</div>
-                              <button type="button" onClick={() => licenseFileInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{licenseUploading ? 'Uploading…' : (licenseFileLabel ? 'Replace' : 'Upload')}</button>
+                              <button type="button" onClick={() => licenseFileInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{licenseUploading ? 'Uploading…' : (licenseFileLabel ? 'Replace' : 'Upload')}</button>
                             </div>
                             {licenseThumbnail ? <div style={{ marginTop: 8 }}><img src={licenseThumbnail} alt="license" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (licensePreviewUrl) window.open(licensePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
                           </div>
@@ -525,7 +525,7 @@ export default function Drivers() {
                             <input ref={panInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handlePanFile} />
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: panLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{panLabel || 'No file'}</div>
-                              <button type="button" onClick={() => panInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{panUploading ? 'Uploading…' : (panLabel ? 'Replace' : 'Upload')}</button>
+                              <button type="button" onClick={() => panInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{panUploading ? 'Uploading…' : (panLabel ? 'Replace' : 'Upload')}</button>
                             </div>
                             {panThumbnail ? <div style={{ marginTop: 8 }}><img src={panThumbnail} alt="pan" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (panPreviewUrl) window.open(panPreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
                           </div>

@@ -382,13 +382,13 @@ export default function Vehicles() {
         <label style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{labelText}</label>
         <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handlePhotoFile(e, side)} />
         <div onClick={() => inputRef.current?.click()}
-          style={{ width: 90, height: 70, borderRadius: 8, border: state.thumbnail ? "none" : "2px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--accent)", overflow: "hidden", position: "relative", boxShadow: state.thumbnail ? "0 4px 12px rgba(0,0,0,0.1)" : "none" }}>
+          style={{ width: 90, height: 70, borderRadius: 8, border: state.thumbnail ? "none" : "2px dashed var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: state.thumbnail ? "var(--accent)" : "hsla(243,75%,62%,0.08)", overflow: "hidden", position: "relative", boxShadow: state.thumbnail ? "0 4px 12px rgba(0,0,0,0.1)" : "none" }}>
           {state.uploading ? (
-            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Uploading…</span>
+            <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 600 }}>Uploading…</span>
           ) : state.thumbnail ? (
             <img src={state.thumbnail} alt={side} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <Plus size={20} color="var(--muted-foreground)" />
+            <Plus size={20} color="var(--primary)" />
           )}
         </div>
         {state.previewUrl && <button type="button" onClick={(e) => { e.stopPropagation(); window.open(state.previewUrl!, '_blank'); }} style={{ fontSize: 11, background: "none", border: "none", color: "var(--primary)", cursor: "pointer", padding: "2px 6px" }}>View</button>}
@@ -471,7 +471,7 @@ export default function Vehicles() {
             <input ref={rcInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleRcFile} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: rcLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{rcLabel || 'No file'}</div>
-              <button type="button" onClick={() => rcInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{rcUploading ? 'Uploading…' : (rcLabel ? 'Replace' : 'Upload')}</button>
+              <button type="button" onClick={() => rcInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{rcUploading ? 'Uploading…' : (rcLabel ? 'Replace' : 'Upload')}</button>
             </div>
             {rcThumbnail ? <div style={{ marginTop: 8 }}><img src={rcThumbnail} alt="rc" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (rcPreviewUrl) window.open(rcPreviewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
           </div>
@@ -489,7 +489,7 @@ export default function Vehicles() {
             <input ref={insuranceInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleInsuranceFile} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: insuranceLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{insuranceLabel || 'No file'}</div>
-              <button type="button" onClick={() => insuranceInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{insuranceUploading ? 'Uploading…' : (insuranceLabel ? 'Replace' : 'Upload')}</button>
+              <button type="button" onClick={() => insuranceInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{insuranceUploading ? 'Uploading…' : (insuranceLabel ? 'Replace' : 'Upload')}</button>
             </div>
             {insuranceThumbnail ? <div style={{ marginTop: 8 }}><img src={insuranceThumbnail} alt="insurance" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (insurancePreviewUrl) window.open(insurancePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
           </div>
@@ -517,7 +517,7 @@ export default function Vehicles() {
             <input ref={taxPermitInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleTaxPermitFile} />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: taxPermitLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{taxPermitLabel || 'No file'}</div>
-              <button type="button" onClick={() => taxPermitInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{taxPermitUploading ? 'Uploading…' : (taxPermitLabel ? 'Replace' : 'Upload')}</button>
+              <button type="button" onClick={() => taxPermitInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{taxPermitUploading ? 'Uploading…' : (taxPermitLabel ? 'Replace' : 'Upload')}</button>
             </div>
             {taxPermitThumbnail ? <div style={{ marginTop: 8 }}><img src={taxPermitThumbnail} alt="tax permit" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (taxPermitPreviewUrl) window.open(taxPermitPreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
           </div>
