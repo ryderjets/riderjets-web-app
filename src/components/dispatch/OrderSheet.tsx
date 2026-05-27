@@ -54,6 +54,54 @@ function getDefaultTransactionDate() {
   return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
 }
 
+function formatPhoneInput(val: string): string {
+  if (!val) return "";
+  if (val === "+") return val;
+
+  if (val.length === 1 && /\d/.test(val)) {
+    val = "+91 " + val;
+  }
+
+  let cc = "";
+  let rest = "";
+  const spaceMatch = val.match(/^(\+\d+)\s+(.*)$/);
+
+  if (spaceMatch) {
+    cc = spaceMatch[1];
+    rest = spaceMatch[2];
+  } else if (val.startsWith('+')) {
+    const clean = val.replace(/[^\d+]/g, '');
+    if (clean.startsWith('+91') && clean.length > 3) {
+      cc = "+91"; rest = clean.slice(3);
+    } else if (clean.startsWith('+1') && clean.length > 2) {
+      cc = "+1"; rest = clean.slice(2);
+    } else if (clean.length > 4) {
+      cc = clean.slice(0, 4); rest = clean.slice(4);
+    } else {
+      cc = clean; rest = "";
+    }
+  } else {
+    const digitsOnly = val.replace(/\D/g, '');
+    if (digitsOnly.length > 0) {
+      cc = "+91"; rest = digitsOnly;
+    } else {
+      cc = val.replace(/[^\d+]/g, ''); rest = "";
+    }
+  }
+
+  const digits = rest.replace(/\D/g, '').slice(0, 10);
+  if (digits.length === 0) return cc + (val.endsWith(' ') ? ' ' : '');
+
+  let local = digits;
+  if (digits.length > 4 && digits.length <= 7) {
+    local = `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  } else if (digits.length > 7) {
+    local = `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+
+  return `${cc} ${local}`;
+}
+
 const empty: TripInput = {
   transactionDate: getDefaultTransactionDate(),
   orderNumber: "", vendor: "", driverName: "", driverPhone: "",
@@ -170,7 +218,7 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
       ...f,
       driverId:    d.id,
       driverName:  d.name,
-      driverPhone: d.phone,
+      driverPhone: formatPhoneInput(d.phone || ""),
       vendor:      d.preferredVendor ?? f.vendor,
       vehicleType: (d.vehicleType ?? f.vehicleType) as TripInput["vehicleType"],
     }));
@@ -265,7 +313,7 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
                 )}
                 <Row2>
                   <Fld label="Driver Name"><input value={form.driverName} onChange={set("driverName")} style={inp} /></Fld>
-                  <Fld label="Phone"><input type="tel" value={form.driverPhone} onChange={set("driverPhone")} style={inp} /></Fld>
+                  <Fld label="Phone"><input type="tel" value={form.driverPhone} onChange={(e) => setForm(f => ({ ...f, driverPhone: formatPhoneInput(e.target.value) }))} placeholder="+91 XXXX-XXX-XXX" style={inp} /></Fld>
                 </Row2>
               </Sec>
 

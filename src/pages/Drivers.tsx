@@ -26,7 +26,55 @@ const VEHICLE_LABELS: Record<string, string> = {
   SMALL_TRUCK: "Small Truck", LARGE_TRUCK: "Large Truck", OTHER: "Other",
 };
 
-const empty = { name: "", phone: "+91 ", vehicleType: "TATA_ACE", preferredVendor: "", address: "", aadharNumber: "", aadharUrl: "", licenseNumber: "", licenseAttachmentUrl: "", licenseExpiry: "", panNumber: "", panUrl: "", notes: "" };
+function formatPhoneInput(val: string): string {
+  if (!val) return "";
+  if (val === "+") return val;
+
+  if (val.length === 1 && /\d/.test(val)) {
+    val = "+91 " + val;
+  }
+
+  let cc = "";
+  let rest = "";
+  const spaceMatch = val.match(/^(\+\d+)\s+(.*)$/);
+
+  if (spaceMatch) {
+    cc = spaceMatch[1];
+    rest = spaceMatch[2];
+  } else if (val.startsWith('+')) {
+    const clean = val.replace(/[^\d+]/g, '');
+    if (clean.startsWith('+91') && clean.length > 3) {
+      cc = "+91"; rest = clean.slice(3);
+    } else if (clean.startsWith('+1') && clean.length > 2) {
+      cc = "+1"; rest = clean.slice(2);
+    } else if (clean.length > 4) {
+      cc = clean.slice(0, 4); rest = clean.slice(4);
+    } else {
+      cc = clean; rest = "";
+    }
+  } else {
+    const digitsOnly = val.replace(/\D/g, '');
+    if (digitsOnly.length > 0) {
+      cc = "+91"; rest = digitsOnly;
+    } else {
+      cc = val.replace(/[^\d+]/g, ''); rest = "";
+    }
+  }
+
+  const digits = rest.replace(/\D/g, '').slice(0, 10);
+  if (digits.length === 0) return cc + (val.endsWith(' ') ? ' ' : '');
+
+  let local = digits;
+  if (digits.length > 4 && digits.length <= 7) {
+    local = `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  } else if (digits.length > 7) {
+    local = `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+
+  return `${cc} ${local}`;
+}
+
+const empty = { name: "", phone: "", vehicleType: "TATA_ACE", preferredVendor: "", address: "", aadharNumber: "", aadharUrl: "", licenseNumber: "", licenseAttachmentUrl: "", licenseExpiry: "", panNumber: "", panUrl: "", notes: "" };
 
 export default function Drivers() {
   const [drivers, setDrivers]   = useState<Driver[]>([]);
@@ -417,7 +465,7 @@ export default function Drivers() {
       ) : null}
       <Row2>
         <Field label="Full Name *"><input required value={form.name} onChange={set("name")} style={inp} /></Field>
-        <Field label="Phone *"><input required value={form.phone} onChange={set("phone")} style={inp} /></Field>
+        <Field label="Phone *"><input required type="tel" value={form.phone} onChange={(e) => setForm(v => ({ ...v, phone: formatPhoneInput(e.target.value) }))} placeholder="+91 XXXX-XXX-XXX" style={inp} /></Field>
       </Row2>
       <Row2>
         <Field label="Vehicle Type">
