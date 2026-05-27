@@ -12,7 +12,7 @@ const cfg: Record<TripStatus, { label: string; color: string; bg: string }> = {
 };
 
 export default function StatusBadge({ status }: { status: TripStatus | string | null | undefined }) {
-  const s = (status ?? "PENDING") as TripStatus;
+  const s = (status ?? "IN_PROGRESS") as TripStatus;
   const c = cfg[s] ?? cfg.OTHER;
 
   return (

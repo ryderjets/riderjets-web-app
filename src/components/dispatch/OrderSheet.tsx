@@ -58,7 +58,7 @@ const empty: TripInput = {
   transactionDate: getDefaultTransactionDate(),
   orderNumber: "", vendor: "", driverName: "", driverPhone: "",
   vehicleType: "TATA_ACE", vehicleNumber: "", driverId: "", vehicleId: "",
-  expense: 0, status: "PENDING", notes: "", podUrl: "", podKind: "NONE",
+  expense: 0, status: "IN_PROGRESS", notes: "", podUrl: "", podKind: "NONE",
 };
 
 export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
@@ -117,7 +117,7 @@ export default function OrderSheet({ open, trip, onClose, onSave }: Props) {
         driverId:        trip.driverId ?? "",
         vehicleId:       trip.vehicleId ?? "",
         expense:         trip.expense ?? 0,
-        status:          (trip.status ?? "PENDING") as TripStatus,
+        status:          (trip.status ?? "IN_PROGRESS") as TripStatus,
         notes:           trip.notes ?? "",
         podUrl:          trip.podUrl ?? "",
         podKind:         (trip.podKind ?? "NONE") as TripInput["podKind"],
