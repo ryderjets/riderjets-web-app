@@ -9,7 +9,7 @@ const TIMELINE_OPTIONS: { value: TimelineFilter; label: string }[] = [
   { value: "month",  label: "This Month" },
   { value: "last30", label: "Last 30 Days" },
   { value: "last90", label: "Last 90 Days" },
-  { value: "last365", label: "Last Year" },
+  { value: "last365", label: "This Year" },
   { value: "all", label: "All Orders" },
 ];
 
