@@ -400,12 +400,13 @@ export default function Vehicles() {
     await client.models.Vehicle.update({ id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
   }
 
-  const dialogInitial = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96, y: 16 };
-  const dialogAnimate = editTarget ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 };
-  const dialogExit = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96 };
+  const dialogInitial = editTarget ? { opacity: 0, y: -10 } : { x: "100%" };
+  const dialogAnimate = editTarget ? { opacity: 1, y: 0 } : { x: 0 };
+  const dialogExit = editTarget ? { opacity: 0, y: -10 } : { x: "100%" };
+  const dialogTransition = editTarget ? undefined : { type: "spring", stiffness: 320, damping: 32 };
   const dialogStyle = editTarget
     ? { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 201, width: "100%", maxWidth: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 0, boxShadow: "var(--shadow-elegant)", overflowY: "auto" }
-    : { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "100%", maxWidth: 860, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-elegant)", maxHeight: "90vh", overflowY: "auto" };
+    : { position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 201, width: "100%", maxWidth: 640, background: "var(--card)", borderLeft: "1px solid var(--border)", boxShadow: "-8px 0 40px hsla(222,28%,4%,0.2)", overflowY: "auto" };
 
   const formContent = (
     <>
@@ -600,7 +601,7 @@ export default function Vehicles() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDialog(false)}
               style={{ position: "fixed", inset: 0, zIndex: 200, background: "hsla(222,28%,4%,0.7)", backdropFilter: "blur(4px)" }} />
-            <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} style={dialogStyle as any}>
+            <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} transition={dialogTransition as any} style={dialogStyle as any}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 10 }}>
                 <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{editTarget ? "Edit Vehicle" : "Add Vehicle"}</h3>
                 <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>

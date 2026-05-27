@@ -355,12 +355,87 @@ export default function Drivers() {
     return v;
   }
 
-  const dialogInitial = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96, y: 16 };
-  const dialogAnimate = editTarget ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 };
-  const dialogExit = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96 };
+  const dialogInitial = editTarget ? { opacity: 0, y: -10 } : { x: "100%" };
+  const dialogAnimate = editTarget ? { opacity: 1, y: 0 } : { x: 0 };
+  const dialogExit = editTarget ? { opacity: 0, y: -10 } : { x: "100%" };
+  const dialogTransition = editTarget ? undefined : { type: "spring", stiffness: 320, damping: 32 };
+
   const dialogStyle = editTarget
     ? { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 201, width: "100%", maxWidth: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 0, boxShadow: "var(--shadow-elegant)", overflowY: "auto" }
-    : { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "100%", maxWidth: 520, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-elegant)" };
+    : { position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 201, width: "100%", maxWidth: 640, background: "var(--card)", borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px hsla(222,28%,4%,0.2)", overflowY: "auto" };
+
+  const formContent = (
+    <>
+      {uploadStatusMessage ? (
+        <div style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, background: uploadStatusType === 'success' ? 'rgba(16,185,129,0.12)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)', color: uploadStatusType === 'success' ? '#047857' : uploadStatusType === 'error' ? '#b91c1c' : '#1d4ed8', border: `1px solid ${uploadStatusType === 'success' ? 'rgba(16,185,129,0.28)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.28)' : 'rgba(59,130,246,0.28)'}` }}>
+          {uploadStatusMessage}
+        </div>
+      ) : null}
+      <Row2>
+        <Field label="Full Name *"><input required value={form.name} onChange={set("name")} style={inp} /></Field>
+        <Field label="Phone *"><input required value={form.phone} onChange={set("phone")} style={inp} /></Field>
+      </Row2>
+      <Row2>
+        <Field label="Vehicle Type">
+          <select value={form.vehicleType} onChange={set("vehicleType")} style={inp}>
+            {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(v => <option key={v} value={v}>{VEHICLE_LABELS[v]}</option>)}
+          </select>
+        </Field>
+        <Field label="Address"><input value={form.address} onChange={set("address")} style={inp} /></Field>
+      </Row2>
+      <Row2>
+        <Field label="Preferred routes"><input value={form.preferredVendor} onChange={set("preferredVendor")} style={inp} /></Field>
+        <Field label="License Expiry">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input ref={licenseInputRef} type="date" value={form.licenseExpiry} onChange={set("licenseExpiry")} style={{ ...inp, flex: 1 }} />
+            <button type="button" onClick={() => { licenseInputRef.current?.showPicker?.(); licenseInputRef.current?.focus(); }}
+              aria-label="Open date picker" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>📅</button>
+          </div>
+        </Field>
+      </Row2>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 8 }}>
+        {/* Aadhar */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Aadhar</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><input value={form.aadharNumber} onChange={set('aadharNumber')} placeholder="Aadhar number" style={inp} /></div>
+          <div>
+            <input ref={aadharInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleAadharFile} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: aadharLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{aadharLabel || 'No file'}</div><button type="button" onClick={() => aadharInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{aadharUploading ? 'Uploading…' : (aadharLabel ? 'Replace' : 'Upload')}</button></div>
+            {aadharThumbnail ? <div style={{ marginTop: 8 }}><img src={aadharThumbnail} alt="aadhar" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (aadharPreviewUrl) window.open(aadharPreviewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+          </div>
+        </div>
+
+        {/* Driver License */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Driver License *</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><input required value={form.licenseNumber} onChange={set('licenseNumber')} placeholder="License number" style={inp} /></div>
+          <div>
+            <input ref={licenseFileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleLicenseFile} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: licenseFileLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{licenseFileLabel || 'No file'}</div><button type="button" onClick={() => licenseFileInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{licenseUploading ? 'Uploading…' : (licenseFileLabel ? 'Replace' : 'Upload')}</button></div>
+            {licenseThumbnail ? <div style={{ marginTop: 8 }}><img src={licenseThumbnail} alt="license" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (licensePreviewUrl) window.open(licensePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+          </div>
+        </div>
+
+        {/* PAN */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>PAN</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}><input value={form.panNumber} onChange={set('panNumber')} placeholder="PAN number" style={inp} /></div>
+          <div>
+            <input ref={panInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handlePanFile} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: panLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{panLabel || 'No file'}</div><button type="button" onClick={() => panInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{panUploading ? 'Uploading…' : (panLabel ? 'Replace' : 'Upload')}</button></div>
+            {panThumbnail ? <div style={{ marginTop: 8 }}><img src={panThumbnail} alt="pan" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (panPreviewUrl) window.open(panPreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 8 }}><Field label="Notes"><textarea value={form.notes} onChange={set("notes")} rows={2} style={{ ...inp, resize: 'vertical' }} /></Field></div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
+        <button type="submit" disabled={saving} style={primaryBtn}>{saving ? 'Saving…' : editTarget ? 'Save changes' : 'Add Driver'}</button>
+      </div>
+    </>
+  );
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1100, margin: "0 auto" }}>
@@ -431,8 +506,8 @@ export default function Drivers() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDialog(false)}
               style={{ position: "fixed", inset: 0, zIndex: 200, background: "hsla(222,28%,4%,0.7)", backdropFilter: "blur(4px)" }} />
-            <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} style={dialogStyle as any}>
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} transition={dialogTransition as any} style={dialogStyle as any}>
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 10 }}>
                 <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{editTarget ? "Edit Driver" : "Add Driver"}</h3>
                 <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
               </div>
@@ -450,128 +525,13 @@ export default function Drivers() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {uploadStatusMessage ? (
-                      <div style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 12, background: uploadStatusType === 'success' ? 'rgba(16,185,129,0.12)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)', color: uploadStatusType === 'success' ? '#047857' : uploadStatusType === 'error' ? '#b91c1c' : '#1d4ed8', border: `1px solid ${uploadStatusType === 'success' ? 'rgba(16,185,129,0.28)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.28)' : 'rgba(59,130,246,0.28)'}` }}>
-                        {uploadStatusMessage}
-                      </div>
-                    ) : null}
-                    <Row2>
-                        <Field label="Full Name *"><input required value={form.name} onChange={set("name")} style={inp} /></Field>
-                        <Field label="Phone *"><input required value={form.phone} onChange={set("phone")} style={inp} /></Field>
-                      </Row2>
-                      <Row2>
-                        <Field label="Vehicle Type">
-                          <select value={form.vehicleType} onChange={set("vehicleType")} style={inp}>
-                            {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(v => <option key={v} value={v}>{VEHICLE_LABELS[v]}</option>)}
-                          </select>
-                        </Field>
-                        <Field label="Address"><input value={form.address} onChange={set("address")} style={inp} /></Field>
-                      </Row2>
-                      <Row2>
-                        <Field label="Preferred routes"><input value={form.preferredVendor} onChange={set("preferredVendor")} style={inp} /></Field>
-                      </Row2>
-                      <Field label="License Expiry">
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input ref={licenseInputRef} type="date" value={form.licenseExpiry} onChange={set("licenseExpiry")} style={{ ...inp, flex: 1 }} />
-                          <button type="button" onClick={() => { licenseInputRef.current?.showPicker?.(); licenseInputRef.current?.focus(); }}
-                            aria-label="Open date picker" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>📅</button>
-                        </div>
-                      </Field>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                        {/* Aadhar */}
-                        <div>
-                          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Aadhar</label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <input value={form.aadharNumber} onChange={set('aadharNumber')} placeholder="Aadhar number" style={inp} />
-                          </div>
-                          <div style={{ marginTop: 8 }}>
-                            <input ref={aadharInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleAadharFile} />
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: aadharLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{aadharLabel || 'No file'}</div>
-                              <button type="button" onClick={() => aadharInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{aadharUploading ? 'Uploading…' : (aadharLabel ? 'Replace' : 'Upload')}</button>
-                            </div>
-                            {aadharThumbnail ? (
-                              <div style={{ marginTop: 8 }}>
-                                <img src={aadharThumbnail} alt="aadhar" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (aadharPreviewUrl) window.open(aadharPreviewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} />
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        {/* Driver License */}
-                        <div>
-                          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Driver License</label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <input required value={form.licenseNumber} onChange={set('licenseNumber')} placeholder="License number" style={inp} />
-                          </div>
-                          <div style={{ marginTop: 8 }}>
-                            <input ref={licenseFileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleLicenseFile} />
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: licenseFileLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{licenseFileLabel || 'No file'}</div>
-                              <button type="button" onClick={() => licenseFileInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{licenseUploading ? 'Uploading…' : (licenseFileLabel ? 'Replace' : 'Upload')}</button>
-                            </div>
-                            {licenseThumbnail ? <div style={{ marginTop: 8 }}><img src={licenseThumbnail} alt="license" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (licensePreviewUrl) window.open(licensePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
-                          </div>
-                        </div>
-
-                        {/* PAN */}
-                        <div>
-                          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>PAN</label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <input value={form.panNumber} onChange={set('panNumber')} placeholder="PAN number" style={inp} />
-                          </div>
-                          <div style={{ marginTop: 8 }}>
-                            <input ref={panInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handlePanFile} />
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: panLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{panLabel || 'No file'}</div>
-                              <button type="button" onClick={() => panInputRef.current?.click()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--primary)', background: 'hsla(243,75%,62%,0.12)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}>{panUploading ? 'Uploading…' : (panLabel ? 'Replace' : 'Upload')}</button>
-                            </div>
-                            {panThumbnail ? <div style={{ marginTop: 8 }}><img src={panThumbnail} alt="pan" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (panPreviewUrl) window.open(panPreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <Field label="Notes"><textarea value={form.notes} onChange={set("notes")} rows={2} style={{ ...inp, resize: 'vertical' }} /></Field>
-                      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-                        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
-                        <button type="submit" disabled={saving} style={primaryBtn}>{saving ? 'Saving…' : editTarget ? 'Save changes' : 'Add Driver'}</button>
-                      </div>
+                      {formContent}
                     </form>
                   </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <Row2>
-                    <Field label="Full Name *"><input required value={form.name} onChange={set("name")} style={inp} /></Field>
-                    <Field label="Phone *"><input required value={form.phone} onChange={set("phone")} style={inp} /></Field>
-                  </Row2>
-                      <Row2>
-                        <Field label="Vehicle Type">
-                          <select value={form.vehicleType} onChange={set("vehicleType")} style={inp}>
-                            {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(v => <option key={v} value={v}>{VEHICLE_LABELS[v]}</option>)}
-                          </select>
-                        </Field>
-                        <Field label="Address"><input value={form.address} onChange={set("address")} style={inp} /></Field>
-                      </Row2>
-                      <Row2>
-                        <Field label="Preferred routes"><input value={form.preferredVendor} onChange={set("preferredVendor")} style={inp} /></Field>
-                      </Row2>
-                  <Row2>
-                    <Field label="License Number"><input required value={form.licenseNumber} onChange={set("licenseNumber")} style={inp} /></Field>
-                    <Field label="License Expiry">
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input ref={licenseInputRef} type="date" value={form.licenseExpiry} onChange={set("licenseExpiry")} style={{ ...inp, flex: 1 }} />
-                        <button type="button" onClick={() => { licenseInputRef.current?.showPicker?.(); licenseInputRef.current?.focus(); }}
-                          aria-label="Open date picker" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>📅</button>
-                      </div>
-                    </Field>
-                  </Row2>
-                  <Field label="Notes"><textarea value={form.notes} onChange={set("notes")} rows={2} style={{ ...inp, resize: 'vertical' }} /></Field>
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-                    <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
-                    <button type="submit" disabled={saving} style={primaryBtn}>{saving ? 'Saving…' : editTarget ? 'Save changes' : 'Add Driver'}</button>
-                  </div>
+                  {formContent}
                 </form>
               )}
             </motion.div>
