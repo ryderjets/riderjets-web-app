@@ -86,6 +86,13 @@ export default function Vehicles() {
     await client.models.Vehicle.update({ id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
   }
 
+  const dialogInitial = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96, y: 16 };
+  const dialogAnimate = editTarget ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 };
+  const dialogExit = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96 };
+  const dialogStyle = editTarget
+    ? { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 201, width: "100%", maxWidth: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 0, boxShadow: "var(--shadow-elegant)", overflowY: "auto" }
+    : { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "100%", maxWidth: 560, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-elegant)", maxHeight: "90vh", overflowY: "auto" };
+
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
@@ -155,42 +162,88 @@ export default function Vehicles() {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDialog(false)}
               style={{ position: "fixed", inset: 0, zIndex: 200, background: "hsla(222,28%,4%,0.7)", backdropFilter: "blur(4px)" }} />
-            <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
-              style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "100%", maxWidth: 560, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-elegant)", maxHeight: "90vh", overflowY: "auto" }}>
+            <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} style={dialogStyle as any}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 1 }}>
                 <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{editTarget ? "Edit Vehicle" : "Add Vehicle"}</h3>
                 <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
               </div>
-              <form onSubmit={handleSubmit} style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
-                <Row2>
-                  <Field label="Vehicle Number *">
-                    <input required value={form.vehicleNumber} onChange={set("vehicleNumber")} placeholder="e.g. MH12AB1234"
-                      disabled={!!editTarget} style={{ ...inp, opacity: editTarget ? 0.6 : 1 }} />
-                  </Field>
-                  <Field label="Type">
-                    <select value={form.type} onChange={set("type")} style={inp}>
-                      {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(t => <option key={t} value={t}>{VEHICLE_LABELS[t]}</option>)}
-                    </select>
-                  </Field>
-                </Row2>
-                <Row2>
-                  <Field label="Make"><input value={form.make} onChange={set("make")} placeholder="e.g. Tata" style={inp} /></Field>
-                  <Field label="Model"><input value={form.model} onChange={set("model")} placeholder="e.g. Ace Gold" style={inp} /></Field>
-                </Row2>
-                <Row2>
-                  <Field label="Capacity (kg)"><input type="number" min="0" value={form.capacityKg} onChange={set("capacityKg")} style={inp} /></Field>
-                  <Field label="Size (ft) *"><input required type="number" min="0" value={form.truckSizeFt} onChange={set("truckSizeFt")} style={inp} /></Field>
-                </Row2>
-                <Field label="RC Number"><input value={form.rcNumber} onChange={set("rcNumber")} style={inp} /></Field>
-                <Row2>
-                  <Field label="Insurance Expiry"><input type="date" value={form.insuranceExpiry} onChange={set("insuranceExpiry")} style={inp} /></Field>
-                  <Field label="Fitness Expiry"><input type="date" value={form.fitnessExpiry} onChange={set("fitnessExpiry")} style={inp} /></Field>
-                </Row2>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-                  <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
-                  <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
+              {editTarget ? (
+                <div style={{ display: 'flex', gap: 20, padding: 24 }}>
+                  <div style={{ width: 300, maxHeight: '70vh', overflowY: 'auto', borderRight: '1px solid var(--border)', paddingRight: 12 }}>
+                    {vehicles.map((vv) => (
+                      <div key={vv.id} onClick={() => openEdit(vv)}
+                        style={{ padding: 10, borderRadius: 8, cursor: 'pointer', marginBottom: 8, background: editTarget?.id === vv.id ? 'rgba(0,128,255,0.06)' : 'transparent', border: editTarget?.id === vv.id ? '1px solid var(--accent)' : '1px solid transparent' }}>
+                        <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--primary)' }}>{vv.vehicleNumber}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{vv.type ? VEHICLE_LABELS[vv.type] : "—"}</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>{[vv.make, vv.model].filter(Boolean).join(" ") || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      <Row2>
+                        <Field label="Vehicle Number *">
+                          <input required value={form.vehicleNumber} onChange={set("vehicleNumber")} placeholder="e.g. MH12AB1234"
+                            disabled={!!editTarget} style={{ ...inp, opacity: editTarget ? 0.6 : 1 }} />
+                        </Field>
+                        <Field label="Type">
+                          <select value={form.type} onChange={set("type")} style={inp}>
+                            {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(t => <option key={t} value={t}>{VEHICLE_LABELS[t]}</option>)}
+                          </select>
+                        </Field>
+                      </Row2>
+                      <Row2>
+                        <Field label="Make"><input value={form.make} onChange={set("make")} placeholder="e.g. Tata" style={inp} /></Field>
+                        <Field label="Model"><input value={form.model} onChange={set("model")} placeholder="e.g. Ace Gold" style={inp} /></Field>
+                      </Row2>
+                      <Row2>
+                        <Field label="Capacity (kg)"><input type="number" min="0" value={form.capacityKg} onChange={set("capacityKg")} style={inp} /></Field>
+                        <Field label="Size (ft) *"><input required type="number" min="0" value={form.truckSizeFt} onChange={set("truckSizeFt")} style={inp} /></Field>
+                      </Row2>
+                      <Field label="RC Number"><input value={form.rcNumber} onChange={set("rcNumber")} style={inp} /></Field>
+                      <Row2>
+                        <Field label="Insurance Expiry"><input type="date" value={form.insuranceExpiry} onChange={set("insuranceExpiry")} style={inp} /></Field>
+                        <Field label="Fitness Expiry"><input type="date" value={form.fitnessExpiry} onChange={set("fitnessExpiry")} style={inp} /></Field>
+                      </Row2>
+                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+                        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
+                        <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
-              </form>
+              ) : (
+                <form onSubmit={handleSubmit} style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+                  <Row2>
+                    <Field label="Vehicle Number *">
+                      <input required value={form.vehicleNumber} onChange={set("vehicleNumber")} placeholder="e.g. MH12AB1234"
+                        disabled={!!editTarget} style={{ ...inp, opacity: editTarget ? 0.6 : 1 }} />
+                    </Field>
+                    <Field label="Type">
+                      <select value={form.type} onChange={set("type")} style={inp}>
+                        {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(t => <option key={t} value={t}>{VEHICLE_LABELS[t]}</option>)}
+                      </select>
+                    </Field>
+                  </Row2>
+                  <Row2>
+                    <Field label="Make"><input value={form.make} onChange={set("make")} placeholder="e.g. Tata" style={inp} /></Field>
+                    <Field label="Model"><input value={form.model} onChange={set("model")} placeholder="e.g. Ace Gold" style={inp} /></Field>
+                  </Row2>
+                  <Row2>
+                    <Field label="Capacity (kg)"><input type="number" min="0" value={form.capacityKg} onChange={set("capacityKg")} style={inp} /></Field>
+                    <Field label="Size (ft) *"><input required type="number" min="0" value={form.truckSizeFt} onChange={set("truckSizeFt")} style={inp} /></Field>
+                  </Row2>
+                  <Field label="RC Number"><input value={form.rcNumber} onChange={set("rcNumber")} style={inp} /></Field>
+                  <Row2>
+                    <Field label="Insurance Expiry"><input type="date" value={form.insuranceExpiry} onChange={set("insuranceExpiry")} style={inp} /></Field>
+                    <Field label="Fitness Expiry"><input type="date" value={form.fitnessExpiry} onChange={set("fitnessExpiry")} style={inp} /></Field>
+                  </Row2>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+                    <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
+                    <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
+                  </div>
+                </form>
+              )}
             </motion.div>
           </>
         )}
