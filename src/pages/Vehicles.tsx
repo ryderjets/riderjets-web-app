@@ -31,7 +31,8 @@ const empty = {
   insuranceNumber: "", insuranceExpiry: "", insuranceUrl: "",
   fitnessExpiry: "",
   ownerName: "", ownerPhone: "", ownerAddress: "",
-  heightClearanceFt: "", nationalPermit: "No", nationalPermitNumber: "", taxPermitUrl: ""
+  heightClearanceFt: "", nationalPermit: "No", nationalPermitNumber: "", taxPermitUrl: "",
+  photoFrontUrl: "", photoBackUrl: "", photoLeftUrl: "", photoRightUrl: ""
 };
 
 export default function Vehicles() {
@@ -61,6 +62,16 @@ export default function Vehicles() {
   const [taxPermitUploading, setTaxPermitUploading] = useState(false);
   const [taxPermitPreviewUrl, setTaxPermitPreviewUrl] = useState<string | null>(null);
   const [taxPermitThumbnail, setTaxPermitThumbnail] = useState<string | null>(null);
+
+  // Vehicle 4-side photos
+  const photoFrontRef = useRef<HTMLInputElement | null>(null);
+  const photoBackRef = useRef<HTMLInputElement | null>(null);
+  const photoLeftRef = useRef<HTMLInputElement | null>(null);
+  const photoRightRef = useRef<HTMLInputElement | null>(null);
+
+  type PhotoState = { label: string; uploading: boolean; previewUrl: string | null; thumbnail: string | null; };
+  const initPhoto = (): PhotoState => ({ label: "", uploading: false, previewUrl: null, thumbnail: null });
+  const [photos, setPhotos] = useState<Record<string, PhotoState>>({ front: initPhoto(), back: initPhoto(), left: initPhoto(), right: initPhoto() });
 
   const [uploadStatusMessage, setUploadStatusMessage] = useState<string>("");
   const [uploadStatusType, setUploadStatusType] = useState<"success" | "error" | "info">("info");
@@ -136,6 +147,7 @@ export default function Vehicles() {
     setRcLabel(""); setRcPreviewUrl(null); setRcThumbnail(null);
     setInsuranceLabel(""); setInsurancePreviewUrl(null); setInsuranceThumbnail(null);
     setTaxPermitLabel(""); setTaxPermitPreviewUrl(null); setTaxPermitThumbnail(null);
+    setPhotos({ front: initPhoto(), back: initPhoto(), left: initPhoto(), right: initPhoto() });
     setShowDialog(true);
   }
 
@@ -161,6 +173,10 @@ export default function Vehicles() {
       nationalPermit: v.nationalPermit ? "Yes" : "No",
       nationalPermitNumber: v.nationalPermitNumber ?? "",
       taxPermitUrl: v.taxPermitUrl ?? "",
+      photoFrontUrl: v.photoFrontUrl ?? "",
+      photoBackUrl: v.photoBackUrl ?? "",
+      photoLeftUrl: v.photoLeftUrl ?? "",
+      photoRightUrl: v.photoRightUrl ?? "",
     });
 
     // prefetch previews
@@ -191,6 +207,21 @@ export default function Vehicles() {
           setTaxPermitLabel((v.taxPermitUrl || "").split('/').pop() || "");
         } catch (err) { console.debug("tax permit preview err", err); }
       } else { setTaxPermitPreviewUrl(null); setTaxPermitThumbnail(null); setTaxPermitLabel(""); }
+
+      const loadSide = async (side: "front"|"back"|"left"|"right", urlStr?: string | null) => {
+        if (!urlStr) return;
+        try {
+          const r: any = await getFileUrl(urlStr);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          let thumb: string | null = null;
+          if (url && isPdfKey(urlStr)) thumb = await loadPdfThumbnail(url); else thumb = url;
+          setPhotos(prev => ({ ...prev, [side]: { ...prev[side], label: urlStr.split('/').pop() || "", previewUrl: url || null, thumbnail: thumb || null } }));
+        } catch (err) { console.debug(`${side} preview err`, err); }
+      };
+      loadSide("front", v.photoFrontUrl);
+      loadSide("back", v.photoBackUrl);
+      loadSide("left", v.photoLeftUrl);
+      loadSide("right", v.photoRightUrl);
     })();
 
     setShowDialog(true);
@@ -220,6 +251,10 @@ export default function Vehicles() {
       nationalPermit: form.nationalPermit === "Yes",
       nationalPermitNumber: form.nationalPermitNumber || undefined,
       taxPermitUrl: form.taxPermitUrl || undefined,
+      photoFrontUrl: form.photoFrontUrl || undefined,
+      photoBackUrl: form.photoBackUrl || undefined,
+      photoLeftUrl: form.photoLeftUrl || undefined,
+      photoRightUrl: form.photoRightUrl || undefined,
       updatedDate: new Date().toISOString(),
     };
     try {
@@ -302,6 +337,65 @@ export default function Vehicles() {
     finally { setTaxPermitUploading(false); }
   }
 
+  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>, side: "front" | "back" | "left" | "right") {
+    const f = e.target.files?.[0]; if (!f) return;
+    setPhotos(p => ({ ...p, [side]: { ...p[side], uploading: true, label: f.name }}));
+    showUploadStatus(`Uploading ${side} photo...`, "info");
+    const MAX = 10 * 1024 * 1024;
+    if (f.size > MAX) {
+      setPhotos(p => ({ ...p, [side]: { ...p[side], uploading: false }}));
+      showUploadStatus(`Photo is too large`, "error"); return;
+    }
+    const baseKey = editTarget?.id || form.vehicleNumber || `vehicle-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `vehicles/${safeBase}/photo_${side}_${Date.now()}_${safeFile}`;
+    
+    try {
+      await uploadFile(key, f);
+      let formKey = "photoFrontUrl";
+      if (side === "back") formKey = "photoBackUrl";
+      if (side === "left") formKey = "photoLeftUrl";
+      if (side === "right") formKey = "photoRightUrl";
+      setForm(v => ({ ...v, [formKey]: key }));
+      
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        let thumb: string | null = null;
+        if (url && isPdfKey(key)) thumb = await loadPdfThumbnail(url); else thumb = url;
+        setPhotos(p => ({ ...p, [side]: { ...p[side], previewUrl: url || null, thumbnail: thumb || null }}));
+      } catch (previewErr) { console.debug(`${side} preview err`, previewErr); }
+      showUploadStatus(`${side} photo uploaded successfully`, "success");
+    } catch (err) {
+      console.error(`${side} upload`, err);
+      showUploadStatus(`${side} photo upload failed: ${getErrorMessage(err)}`, "error");
+    } finally {
+      setPhotos(p => ({ ...p, [side]: { ...p[side], uploading: false }}));
+    }
+  }
+
+  function renderPhotoBox(side: "front"|"back"|"left"|"right", labelText: string, inputRef: any) {
+    const state = photos[side];
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{labelText}</label>
+        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handlePhotoFile(e, side)} />
+        <div onClick={() => inputRef.current?.click()}
+          style={{ width: 90, height: 70, borderRadius: 8, border: state.thumbnail ? "none" : "2px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "var(--accent)", overflow: "hidden", position: "relative", boxShadow: state.thumbnail ? "0 4px 12px rgba(0,0,0,0.1)" : "none" }}>
+          {state.uploading ? (
+            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Uploading…</span>
+          ) : state.thumbnail ? (
+            <img src={state.thumbnail} alt={side} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <Plus size={20} color="var(--muted-foreground)" />
+          )}
+        </div>
+        {state.previewUrl && <button type="button" onClick={(e) => { e.stopPropagation(); window.open(state.previewUrl!, '_blank'); }} style={{ fontSize: 11, background: "none", border: "none", color: "var(--primary)", cursor: "pointer", padding: "2px 6px" }}>View</button>}
+      </div>
+    );
+  }
+
   async function updateVetting(id: string, vettingStatus: VettingStatus) {
     await client.models.Vehicle.update({ id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
   }
@@ -344,10 +438,30 @@ export default function Vehicles() {
       </Row2>
       <Field label="Address"><input value={form.ownerAddress} onChange={set("ownerAddress")} style={inp} /></Field>
 
+      <div style={{ fontWeight: 600, marginTop: 16, marginBottom: 12, color: "var(--foreground)" }}>Vehicle Photos</div>
+      <div style={{ display: "grid", gridTemplateColumns: "100px 100px 100px", gridTemplateRows: "auto auto auto", gap: "16px 32px", justifyContent: "center", alignItems: "center", background: "hsla(222,20%,10%,0.3)", padding: "24px 0", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", marginTop: 12 }}>
+        <div style={{ gridColumn: 2, gridRow: 1 }}>
+          {renderPhotoBox("front", "Front", photoFrontRef)}
+        </div>
+        <div style={{ gridColumn: 1, gridRow: 2 }}>
+          {renderPhotoBox("left", "Left Side", photoLeftRef)}
+        </div>
+        <div style={{ gridColumn: 2, gridRow: 2, display: "flex", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, background: "var(--card)", borderRadius: "50%", border: "1px solid var(--border)", boxShadow: "var(--shadow-elegant)" }}>
+            <Truck size={32} color="var(--muted-foreground)" strokeWidth={1.5} />
+          </div>
+        </div>
+        <div style={{ gridColumn: 3, gridRow: 2 }}>
+          {renderPhotoBox("right", "Right Side", photoRightRef)}
+        </div>
+        <div style={{ gridColumn: 2, gridRow: 3 }}>
+          {renderPhotoBox("back", "Back", photoBackRef)}
+        </div>
+      </div>
+
       <div style={{ fontWeight: 600, marginTop: 16, marginBottom: -4, color: "var(--foreground)" }}>Documents & Attachments</div>
       
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-        {/* RC Book */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, alignItems: 'start' }}>
         <div>
           <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>RC Book</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -363,7 +477,6 @@ export default function Vehicles() {
           </div>
         </div>
 
-        {/* Insurance */}
         <div>
           <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Insurance</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -381,8 +494,9 @@ export default function Vehicles() {
             {insuranceThumbnail ? <div style={{ marginTop: 8 }}><img src={insuranceThumbnail} alt="insurance" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (insurancePreviewUrl) window.open(insurancePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
           </div>
         </div>
+      </div>
 
-        {/* Goods Permit / Tax */}
+      <div style={{ marginTop: 24 }}>
         <div>
           <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Goods Permit / Tax</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>

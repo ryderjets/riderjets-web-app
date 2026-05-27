@@ -73,6 +73,10 @@ const schema = a.schema({
       nationalPermit:   a.boolean(),
       nationalPermitNumber: a.string(),
       taxPermitUrl:     a.string(),
+      photoFrontUrl:    a.string(),
+      photoBackUrl:     a.string(),
+      photoLeftUrl:     a.string(),
+      photoRightUrl:    a.string(),
       vettingStatus:    a.enum([...VETTING]),
       updatedDate:      a.datetime(),
     })
