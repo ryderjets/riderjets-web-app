@@ -189,43 +189,52 @@ export default function Drivers() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true);
-    if (editTarget) {
-      await client.models.Driver.update({
-        id: editTarget.id,
-        name: form.name, phone: form.phone,
-        vehicleType: form.vehicleType as Driver["vehicleType"],
-        preferredVendor: form.preferredVendor,
-        address: form.address,
-        aadharNumber: form.aadharNumber || undefined,
-        aadharUrl: form.aadharUrl || undefined,
-        licenseNumber: form.licenseNumber,
-        licenseAttachmentUrl: form.licenseAttachmentUrl || undefined,
-        licenseExpiry: form.licenseExpiry || undefined,
-        panNumber: form.panNumber || undefined,
-        panUrl: form.panUrl || undefined,
-        notes: form.notes,
-        updatedDate: new Date().toISOString(),
-      }, { authMode: "apiKey" });
-    } else {
-      await client.models.Driver.create({
-        name: form.name, phone: form.phone,
-        vehicleType: form.vehicleType as Driver["vehicleType"],
-        preferredVendor: form.preferredVendor,
-        address: form.address,
-        aadharNumber: form.aadharNumber || undefined,
-        aadharUrl: form.aadharUrl || undefined,
-        licenseNumber: form.licenseNumber,
-        licenseAttachmentUrl: form.licenseAttachmentUrl || undefined,
-        licenseExpiry: form.licenseExpiry || undefined,
-        panNumber: form.panNumber || undefined,
-        panUrl: form.panUrl || undefined,
-        notes: form.notes,
-        vettingStatus: "PENDING_REVIEW",
-        isAvailable: true,
-        updatedDate: new Date().toISOString(),
-      }, { authMode: "apiKey" });
+    try {
+      let res;
+      if (editTarget) {
+        res = await client.models.Driver.update({
+          id: editTarget.id,
+          name: form.name, phone: form.phone,
+          vehicleType: form.vehicleType as Driver["vehicleType"],
+          preferredVendor: form.preferredVendor,
+          address: form.address,
+          aadharNumber: form.aadharNumber || undefined,
+          aadharUrl: form.aadharUrl || undefined,
+          licenseNumber: form.licenseNumber,
+          licenseAttachmentUrl: form.licenseAttachmentUrl || undefined,
+          licenseExpiry: form.licenseExpiry || undefined,
+          panNumber: form.panNumber || undefined,
+          panUrl: form.panUrl || undefined,
+          notes: form.notes,
+          updatedDate: new Date().toISOString(),
+        }, { authMode: "apiKey" });
+      } else {
+        res = await client.models.Driver.create({
+          name: form.name, phone: form.phone,
+          vehicleType: form.vehicleType as Driver["vehicleType"],
+          preferredVendor: form.preferredVendor,
+          address: form.address,
+          aadharNumber: form.aadharNumber || undefined,
+          aadharUrl: form.aadharUrl || undefined,
+          licenseNumber: form.licenseNumber,
+          licenseAttachmentUrl: form.licenseAttachmentUrl || undefined,
+          licenseExpiry: form.licenseExpiry || undefined,
+          panNumber: form.panNumber || undefined,
+          panUrl: form.panUrl || undefined,
+          notes: form.notes,
+          vettingStatus: "PENDING_REVIEW",
+          isAvailable: true,
+          updatedDate: new Date().toISOString(),
+        }, { authMode: "apiKey" });
+      }
+      if (res.errors) throw new Error(res.errors.map((e: any) => e.message).join(", "));
+      setForm({ ...empty }); setShowDialog(false); setEditTarget(null);
+    } catch (err) {
+      console.error("Save failed:", err);
+      showUploadStatus(`Save failed: ${getErrorMessage(err)}`, "error");
+    } finally {
+      setSaving(false);
     }
-    setForm({ ...empty }); setShowDialog(false); setEditTarget(null); setSaving(false);
   }
 
   async function updateVetting(id: string, vettingStatus: VettingStatus) {

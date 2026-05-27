@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { generateClient } from "aws-amplify/data";
+import { uploadFile, getFileUrl } from "../lib/storage";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.js?url";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, Clock, ShieldCheck, ShieldAlert, Truck, Pencil } from "lucide-react";
 import type { Schema } from "../../amplify/data/resource";
+
+GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const client = generateClient<Schema>();
 type Vehicle = Schema["Vehicle"]["type"];
@@ -19,7 +24,15 @@ const VEHICLE_LABELS: Record<string, string> = {
   SMALL_TRUCK: "Small Truck", LARGE_TRUCK: "Large Truck", OTHER: "Other",
 };
 
-const empty = { vehicleNumber: "", type: "TATA_ACE", make: "", model: "", capacityKg: "", truckSizeFt: "", rcNumber: "", insuranceExpiry: "", fitnessExpiry: "" };
+const empty = {
+  vehicleNumber: "", type: "TATA_ACE", make: "", model: "",
+  capacityKg: "", truckSizeFt: "",
+  rcNumber: "", rcUrl: "",
+  insuranceNumber: "", insuranceExpiry: "", insuranceUrl: "",
+  fitnessExpiry: "",
+  ownerName: "", ownerPhone: "", ownerAddress: "",
+  heightClearanceFt: "", nationalPermit: "No", nationalPermitNumber: "", taxPermitUrl: ""
+};
 
 export default function Vehicles() {
   const [vehicles, setVehicles]     = useState<Vehicle[]>([]);
@@ -29,6 +42,30 @@ export default function Vehicles() {
   const [form, setForm]             = useState({ ...empty });
   const [saving, setSaving]         = useState(false);
 
+  // File input refs
+  const rcInputRef = useRef<HTMLInputElement | null>(null);
+  const insuranceInputRef = useRef<HTMLInputElement | null>(null);
+  const taxPermitInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [rcLabel, setRcLabel] = useState<string>("");
+  const [rcUploading, setRcUploading] = useState(false);
+  const [rcPreviewUrl, setRcPreviewUrl] = useState<string | null>(null);
+  const [rcThumbnail, setRcThumbnail] = useState<string | null>(null);
+
+  const [insuranceLabel, setInsuranceLabel] = useState<string>("");
+  const [insuranceUploading, setInsuranceUploading] = useState(false);
+  const [insurancePreviewUrl, setInsurancePreviewUrl] = useState<string | null>(null);
+  const [insuranceThumbnail, setInsuranceThumbnail] = useState<string | null>(null);
+
+  const [taxPermitLabel, setTaxPermitLabel] = useState<string>("");
+  const [taxPermitUploading, setTaxPermitUploading] = useState(false);
+  const [taxPermitPreviewUrl, setTaxPermitPreviewUrl] = useState<string | null>(null);
+  const [taxPermitThumbnail, setTaxPermitThumbnail] = useState<string | null>(null);
+
+  const [uploadStatusMessage, setUploadStatusMessage] = useState<string>("");
+  const [uploadStatusType, setUploadStatusType] = useState<"success" | "error" | "info">("info");
+  const uploadStatusTimer = useRef<number | null>(null);
+
   useEffect(() => {
     const sub = client.models.Vehicle.observeQuery({ authMode: "apiKey" }).subscribe({
       next: (d) => { setVehicles([...d.items]); setLoading(false); },
@@ -36,9 +73,69 @@ export default function Vehicles() {
     return () => sub.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
+    };
+  }, []);
+
+  function getErrorMessage(err: unknown) {
+    if (!err) return "Unknown error";
+    if (typeof err === "string") return err;
+    if (err instanceof Error) return err.message;
+    try { return JSON.stringify(err); } catch { return "Unknown error"; }
+  }
+
+  function showUploadStatus(message: string, type: "success" | "error" | "info" = "success") {
+    setUploadStatusMessage(message);
+    setUploadStatusType(type);
+    if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
+    uploadStatusTimer.current = window.setTimeout(() => setUploadStatusMessage(""), 3000);
+  }
+
+  function isPdfKey(path?: string | null): boolean {
+    return !!path && path.toLowerCase().endsWith(".pdf");
+  }
+
+  async function loadPdfThumbnail(url: string): Promise<string | null> {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`PDF fetch failed: ${resp.status}`);
+      const array = await resp.arrayBuffer();
+      const pdf = await getDocument({ data: array }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = Math.min(1, 150 / viewport.width) || 1;
+      const renderViewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = renderViewport.width;
+      canvas.height = renderViewport.height;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+      return canvas.toDataURL("image/png");
+    } catch (err) {
+      console.debug("PDF thumbnail generation failed", err);
+      return null;
+    }
+  }
+
+  async function setAttachmentPreview(key: string, url: string | null, setPreviewUrl: (value: string | null) => void, setThumbnail: (value: string | null) => void) {
+    setPreviewUrl(url);
+    if (url && isPdfKey(key)) {
+      const thumb = await loadPdfThumbnail(url);
+      setThumbnail(thumb);
+    } else {
+      setThumbnail(url);
+    }
+  }
+
   function openAdd() {
     setEditTarget(null);
     setForm({ ...empty });
+    setRcLabel(""); setRcPreviewUrl(null); setRcThumbnail(null);
+    setInsuranceLabel(""); setInsurancePreviewUrl(null); setInsuranceThumbnail(null);
+    setTaxPermitLabel(""); setTaxPermitPreviewUrl(null); setTaxPermitThumbnail(null);
     setShowDialog(true);
   }
 
@@ -52,9 +149,50 @@ export default function Vehicles() {
       capacityKg: v.capacityKg?.toString() ?? "",
       truckSizeFt: v.truckSizeFt?.toString() ?? "",
       rcNumber: v.rcNumber ?? "",
+      rcUrl: v.rcUrl ?? "",
+      insuranceNumber: v.insuranceNumber ?? "",
       insuranceExpiry: v.insuranceExpiry ?? "",
+      insuranceUrl: v.insuranceUrl ?? "",
       fitnessExpiry: v.fitnessExpiry ?? "",
+      ownerName: v.ownerName ?? "",
+      ownerPhone: v.ownerPhone ?? "",
+      ownerAddress: v.ownerAddress ?? "",
+      heightClearanceFt: v.heightClearanceFt?.toString() ?? "",
+      nationalPermit: v.nationalPermit ? "Yes" : "No",
+      nationalPermitNumber: v.nationalPermitNumber ?? "",
+      taxPermitUrl: v.taxPermitUrl ?? "",
     });
+
+    // prefetch previews
+    (async () => {
+      if (v.rcUrl) {
+        try {
+          const r: any = await getFileUrl(v.rcUrl);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          await setAttachmentPreview(v.rcUrl, url || null, setRcPreviewUrl, setRcThumbnail);
+          setRcLabel((v.rcUrl || "").split('/').pop() || "");
+        } catch (err) { console.debug("rc preview err", err); }
+      } else { setRcPreviewUrl(null); setRcThumbnail(null); setRcLabel(""); }
+
+      if (v.insuranceUrl) {
+        try {
+          const r: any = await getFileUrl(v.insuranceUrl);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          await setAttachmentPreview(v.insuranceUrl, url || null, setInsurancePreviewUrl, setInsuranceThumbnail);
+          setInsuranceLabel((v.insuranceUrl || "").split('/').pop() || "");
+        } catch (err) { console.debug("insurance preview err", err); }
+      } else { setInsurancePreviewUrl(null); setInsuranceThumbnail(null); setInsuranceLabel(""); }
+
+      if (v.taxPermitUrl) {
+        try {
+          const r: any = await getFileUrl(v.taxPermitUrl);
+          const url = typeof r === 'string' ? r : (r?.url || r?.signedUrl || r?.presignedUrl || r?.getUrl);
+          await setAttachmentPreview(v.taxPermitUrl, url || null, setTaxPermitPreviewUrl, setTaxPermitThumbnail);
+          setTaxPermitLabel((v.taxPermitUrl || "").split('/').pop() || "");
+        } catch (err) { console.debug("tax permit preview err", err); }
+      } else { setTaxPermitPreviewUrl(null); setTaxPermitThumbnail(null); setTaxPermitLabel(""); }
+    })();
+
     setShowDialog(true);
   }
 
@@ -68,18 +206,100 @@ export default function Vehicles() {
       type: form.type as Vehicle["type"],
       make: form.make, model: form.model,
       capacityKg: form.capacityKg ? parseFloat(form.capacityKg) : undefined,
-      truckSizeFt: form.truckSizeFt ? parseInt(form.truckSizeFt) : undefined,
+      truckSizeFt: form.truckSizeFt ? parseFloat(form.truckSizeFt) : undefined,
+      heightClearanceFt: form.heightClearanceFt ? parseFloat(form.heightClearanceFt) : undefined,
       rcNumber: form.rcNumber,
+      rcUrl: form.rcUrl || undefined,
+      insuranceNumber: form.insuranceNumber,
       insuranceExpiry: form.insuranceExpiry || undefined,
+      insuranceUrl: form.insuranceUrl || undefined,
       fitnessExpiry: form.fitnessExpiry || undefined,
+      ownerName: form.ownerName,
+      ownerPhone: form.ownerPhone,
+      ownerAddress: form.ownerAddress,
+      nationalPermit: form.nationalPermit === "Yes",
+      nationalPermitNumber: form.nationalPermitNumber || undefined,
+      taxPermitUrl: form.taxPermitUrl || undefined,
       updatedDate: new Date().toISOString(),
     };
-    if (editTarget) {
-      await client.models.Vehicle.update({ id: editTarget.id, ...payload }, { authMode: "apiKey" });
-    } else {
-      await client.models.Vehicle.create({ ...payload, vettingStatus: "PENDING_REVIEW" }, { authMode: "apiKey" });
+    try {
+      let res;
+      if (editTarget) {
+        res = await client.models.Vehicle.update({ id: editTarget.id, ...payload }, { authMode: "apiKey" });
+      } else {
+        res = await client.models.Vehicle.create({ ...payload, vettingStatus: "PENDING_REVIEW" }, { authMode: "apiKey" });
+      }
+      if (res.errors) throw new Error(res.errors.map((e: any) => e.message).join(", "));
+      setForm({ ...empty }); setShowDialog(false); setEditTarget(null);
+    } catch (err) {
+      console.error("Save failed:", err);
+      showUploadStatus(`Save failed: ${getErrorMessage(err)}`, "error");
+    } finally {
+      setSaving(false);
     }
-    setForm({ ...empty }); setShowDialog(false); setEditTarget(null); setSaving(false);
+  }
+
+  async function handleRcFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return; setRcUploading(true); showUploadStatus("Uploading RC...", "info");
+    const selectedFileName = f.name; setRcLabel(selectedFileName);
+    const MAX = 10 * 1024 * 1024; if (f.size > MAX) { setRcUploading(false); showUploadStatus("RC file is too large", "error"); return; }
+    const baseKey = editTarget?.id || form.vehicleNumber || `vehicle-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = selectedFileName.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `vehicles/${safeBase}/rc_${Date.now()}_${safeFile}`;
+    try {
+      await uploadFile(key, f);
+      setForm(v => ({ ...v, rcUrl: key }));
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        await setAttachmentPreview(key, url||null, setRcPreviewUrl, setRcThumbnail);
+      } catch (previewErr) { console.debug('rc preview err', previewErr); }
+      showUploadStatus("RC uploaded successfully", "success");
+    } catch (err) { console.error('rc upload', err); showUploadStatus(`RC upload failed: ${getErrorMessage(err)}`, "error"); }
+    finally { setRcUploading(false); }
+  }
+
+  async function handleInsuranceFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return; setInsuranceUploading(true); showUploadStatus("Uploading Insurance...", "info");
+    const selectedFileName = f.name; setInsuranceLabel(selectedFileName);
+    const MAX = 10 * 1024 * 1024; if (f.size > MAX) { setInsuranceUploading(false); showUploadStatus("Insurance file is too large", "error"); return; }
+    const baseKey = editTarget?.id || form.vehicleNumber || `vehicle-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = selectedFileName.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `vehicles/${safeBase}/insurance_${Date.now()}_${safeFile}`;
+    try {
+      await uploadFile(key, f);
+      setForm(v => ({ ...v, insuranceUrl: key }));
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        await setAttachmentPreview(key, url||null, setInsurancePreviewUrl, setInsuranceThumbnail);
+      } catch (previewErr) { console.debug('insurance preview err', previewErr); }
+      showUploadStatus("Insurance uploaded successfully", "success");
+    } catch (err) { console.error('insurance upload', err); showUploadStatus(`Insurance upload failed: ${getErrorMessage(err)}`, "error"); }
+    finally { setInsuranceUploading(false); }
+  }
+
+  async function handleTaxPermitFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (!f) return; setTaxPermitUploading(true); showUploadStatus("Uploading Tax/Permit...", "info");
+    const selectedFileName = f.name; setTaxPermitLabel(selectedFileName);
+    const MAX = 10 * 1024 * 1024; if (f.size > MAX) { setTaxPermitUploading(false); showUploadStatus("Tax/Permit file is too large", "error"); return; }
+    const baseKey = editTarget?.id || form.vehicleNumber || `vehicle-${Date.now()}`;
+    const safeBase = String(baseKey).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeFile = selectedFileName.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const key = `vehicles/${safeBase}/tax_permit_${Date.now()}_${safeFile}`;
+    try {
+      await uploadFile(key, f);
+      setForm(v => ({ ...v, taxPermitUrl: key }));
+      try {
+        const r: any = await getFileUrl(key);
+        const url = typeof r === 'string' ? r : (r?.url||r?.signedUrl||r?.presignedUrl||r?.getUrl);
+        await setAttachmentPreview(key, url||null, setTaxPermitPreviewUrl, setTaxPermitThumbnail);
+      } catch (previewErr) { console.debug('tax permit preview err', previewErr); }
+      showUploadStatus("Tax/Permit uploaded successfully", "success");
+    } catch (err) { console.error('tax permit upload', err); showUploadStatus(`Tax/Permit upload failed: ${getErrorMessage(err)}`, "error"); }
+    finally { setTaxPermitUploading(false); }
   }
 
   async function updateVetting(id: string, vettingStatus: VettingStatus) {
@@ -91,7 +311,111 @@ export default function Vehicles() {
   const dialogExit = editTarget ? { opacity: 0, y: -10 } : { opacity: 0, scale: 0.96 };
   const dialogStyle = editTarget
     ? { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 201, width: "100%", maxWidth: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 0, boxShadow: "var(--shadow-elegant)", overflowY: "auto" }
-    : { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "100%", maxWidth: 560, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-elegant)", maxHeight: "90vh", overflowY: "auto" };
+    : { position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 201, width: "100%", maxWidth: 860, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-elegant)", maxHeight: "90vh", overflowY: "auto" };
+
+  const formContent = (
+    <>
+      <div style={{ fontWeight: 600, marginTop: 8, marginBottom: -4, color: "var(--foreground)" }}>Vehicle Info</div>
+      <Row2>
+        <Field label="Vehicle Number *">
+          <input required value={form.vehicleNumber} onChange={set("vehicleNumber")} placeholder="e.g. MH12AB1234"
+            disabled={!!editTarget} style={{ ...inp, opacity: editTarget ? 0.6 : 1 }} />
+        </Field>
+        <Field label="Type">
+          <select value={form.type} onChange={set("type")} style={inp}>
+            {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(t => <option key={t} value={t}>{VEHICLE_LABELS[t]}</option>)}
+          </select>
+        </Field>
+      </Row2>
+      <Row2>
+        <Field label="Make"><input value={form.make} onChange={set("make")} placeholder="e.g. Tata" style={inp} /></Field>
+        <Field label="Model"><input value={form.model} onChange={set("model")} placeholder="e.g. Ace Gold" style={inp} /></Field>
+      </Row2>
+      <Row2>
+        <Field label="Capacity (kg)"><input type="number" min="0" step="any" value={form.capacityKg} onChange={set("capacityKg")} style={inp} /></Field>
+        <Field label="Size (ft) *"><input required type="number" min="0" step="any" value={form.truckSizeFt} onChange={set("truckSizeFt")} style={inp} /></Field>
+        <Field label="Height Clearance (ft)"><input type="number" min="0" step="any" value={form.heightClearanceFt} onChange={set("heightClearanceFt")} style={inp} /></Field>
+      </Row2>
+
+      <div style={{ fontWeight: 600, marginTop: 16, marginBottom: -4, color: "var(--foreground)" }}>Owner Details</div>
+      <Row2>
+        <Field label="Name"><input value={form.ownerName} onChange={set("ownerName")} style={inp} /></Field>
+        <Field label="Phone"><input value={form.ownerPhone} onChange={set("ownerPhone")} style={inp} /></Field>
+      </Row2>
+      <Field label="Address"><input value={form.ownerAddress} onChange={set("ownerAddress")} style={inp} /></Field>
+
+      <div style={{ fontWeight: 600, marginTop: 16, marginBottom: -4, color: "var(--foreground)" }}>Documents & Attachments</div>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        {/* RC Book */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>RC Book</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input value={form.rcNumber} onChange={set('rcNumber')} placeholder="RC number" style={inp} />
+          </div>
+          <div>
+            <input ref={rcInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleRcFile} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: rcLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{rcLabel || 'No file'}</div>
+              <button type="button" onClick={() => rcInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{rcUploading ? 'Uploading…' : (rcLabel ? 'Replace' : 'Upload')}</button>
+            </div>
+            {rcThumbnail ? <div style={{ marginTop: 8 }}><img src={rcThumbnail} alt="rc" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (rcPreviewUrl) window.open(rcPreviewUrl, '_blank', 'noopener,noreferrer'); }} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+          </div>
+        </div>
+
+        {/* Insurance */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Insurance</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input value={form.insuranceNumber} onChange={set('insuranceNumber')} placeholder="Insurance number" style={inp} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input type="date" value={form.insuranceExpiry} onChange={set('insuranceExpiry')} title="Insurance Expiry" style={inp} />
+          </div>
+          <div>
+            <input ref={insuranceInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleInsuranceFile} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: insuranceLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{insuranceLabel || 'No file'}</div>
+              <button type="button" onClick={() => insuranceInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{insuranceUploading ? 'Uploading…' : (insuranceLabel ? 'Replace' : 'Upload')}</button>
+            </div>
+            {insuranceThumbnail ? <div style={{ marginTop: 8 }}><img src={insuranceThumbnail} alt="insurance" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (insurancePreviewUrl) window.open(insurancePreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+          </div>
+        </div>
+
+        {/* Goods Permit / Tax */}
+        <div>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--muted-foreground)', marginBottom: 6 }}>Goods Permit / Tax</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <select value={form.nationalPermit} onChange={set('nationalPermit')} style={inp}>
+              <option value="No">No National Permit</option>
+              <option value="Yes">Has National Permit</option>
+            </select>
+          </div>
+          {form.nationalPermit === 'Yes' && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <input value={form.nationalPermitNumber} onChange={set('nationalPermitNumber')} placeholder="National Permit number" style={inp} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input type="date" value={form.fitnessExpiry} onChange={set("fitnessExpiry")} title="Fitness Expiry" style={inp} />
+          </div>
+          <div>
+            <input ref={taxPermitInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleTaxPermitFile} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ ...inp, padding: 8, minHeight: 44, display: 'flex', alignItems: 'center', color: taxPermitLabel ? 'var(--foreground)' : 'var(--muted-foreground)' }}>{taxPermitLabel || 'No file'}</div>
+              <button type="button" onClick={() => taxPermitInputRef.current?.click()} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', cursor: 'pointer' }}>{taxPermitUploading ? 'Uploading…' : (taxPermitLabel ? 'Replace' : 'Upload')}</button>
+            </div>
+            {taxPermitThumbnail ? <div style={{ marginTop: 8 }}><img src={taxPermitThumbnail} alt="tax permit" onClick={(e)=>{e.preventDefault(); e.stopPropagation(); if (taxPermitPreviewUrl) window.open(taxPermitPreviewUrl, '_blank', 'noopener,noreferrer');}} style={{ height: 80, cursor: 'pointer', borderRadius: 6, objectFit: 'cover' }} /></div> : null}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
+        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
+        <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
+      </div>
+    </>
+  );
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1100, margin: "0 auto" }}>
@@ -163,10 +487,23 @@ export default function Vehicles() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDialog(false)}
               style={{ position: "fixed", inset: 0, zIndex: 200, background: "hsla(222,28%,4%,0.7)", backdropFilter: "blur(4px)" }} />
             <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} style={dialogStyle as any}>
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 1 }}>
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 10 }}>
                 <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{editTarget ? "Edit Vehicle" : "Add Vehicle"}</h3>
                 <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
               </div>
+
+              <AnimatePresence>
+                {uploadStatusMessage && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                    style={{ position: "sticky", top: 76, zIndex: 9, margin: '16px 24px 0', padding: '10px 14px', borderRadius: 12, background: uploadStatusType === 'success' ? 'rgba(16,185,129,0.12)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)', color: uploadStatusType === 'success' ? '#047857' : uploadStatusType === 'error' ? '#b91c1c' : '#1d4ed8', border: `1px solid ${uploadStatusType === 'success' ? 'rgba(16,185,129,0.28)' : uploadStatusType === 'error' ? 'rgba(239,68,68,0.28)' : 'rgba(59,130,246,0.28)'}`, backdropFilter: "blur(8px)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500 }}>
+                      {uploadStatusType === 'success' ? <ShieldCheck size={16} /> : uploadStatusType === 'error' ? <ShieldAlert size={16} /> : <Clock size={16} />}
+                      {uploadStatusMessage}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {editTarget ? (
                 <div style={{ display: 'flex', gap: 20, padding: 24 }}>
                   <div style={{ width: 300, maxHeight: '70vh', overflowY: 'auto', borderRight: '1px solid var(--border)', paddingRight: 12 }}>
@@ -181,67 +518,13 @@ export default function Vehicles() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                      <Row2>
-                        <Field label="Vehicle Number *">
-                          <input required value={form.vehicleNumber} onChange={set("vehicleNumber")} placeholder="e.g. MH12AB1234"
-                            disabled={!!editTarget} style={{ ...inp, opacity: editTarget ? 0.6 : 1 }} />
-                        </Field>
-                        <Field label="Type">
-                          <select value={form.type} onChange={set("type")} style={inp}>
-                            {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(t => <option key={t} value={t}>{VEHICLE_LABELS[t]}</option>)}
-                          </select>
-                        </Field>
-                      </Row2>
-                      <Row2>
-                        <Field label="Make"><input value={form.make} onChange={set("make")} placeholder="e.g. Tata" style={inp} /></Field>
-                        <Field label="Model"><input value={form.model} onChange={set("model")} placeholder="e.g. Ace Gold" style={inp} /></Field>
-                      </Row2>
-                      <Row2>
-                        <Field label="Capacity (kg)"><input type="number" min="0" value={form.capacityKg} onChange={set("capacityKg")} style={inp} /></Field>
-                        <Field label="Size (ft) *"><input required type="number" min="0" value={form.truckSizeFt} onChange={set("truckSizeFt")} style={inp} /></Field>
-                      </Row2>
-                      <Field label="RC Number"><input value={form.rcNumber} onChange={set("rcNumber")} style={inp} /></Field>
-                      <Row2>
-                        <Field label="Insurance Expiry"><input type="date" value={form.insuranceExpiry} onChange={set("insuranceExpiry")} style={inp} /></Field>
-                        <Field label="Fitness Expiry"><input type="date" value={form.fitnessExpiry} onChange={set("fitnessExpiry")} style={inp} /></Field>
-                      </Row2>
-                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-                        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
-                        <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
-                      </div>
+                      {formContent}
                     </form>
                   </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
-                  <Row2>
-                    <Field label="Vehicle Number *">
-                      <input required value={form.vehicleNumber} onChange={set("vehicleNumber")} placeholder="e.g. MH12AB1234"
-                        disabled={!!editTarget} style={{ ...inp, opacity: editTarget ? 0.6 : 1 }} />
-                    </Field>
-                    <Field label="Type">
-                      <select value={form.type} onChange={set("type")} style={inp}>
-                        {["AUTO","TROLLEY","TATA_ACE","SMALL_TRUCK","LARGE_TRUCK","OTHER"].map(t => <option key={t} value={t}>{VEHICLE_LABELS[t]}</option>)}
-                      </select>
-                    </Field>
-                  </Row2>
-                  <Row2>
-                    <Field label="Make"><input value={form.make} onChange={set("make")} placeholder="e.g. Tata" style={inp} /></Field>
-                    <Field label="Model"><input value={form.model} onChange={set("model")} placeholder="e.g. Ace Gold" style={inp} /></Field>
-                  </Row2>
-                  <Row2>
-                    <Field label="Capacity (kg)"><input type="number" min="0" value={form.capacityKg} onChange={set("capacityKg")} style={inp} /></Field>
-                    <Field label="Size (ft) *"><input required type="number" min="0" value={form.truckSizeFt} onChange={set("truckSizeFt")} style={inp} /></Field>
-                  </Row2>
-                  <Field label="RC Number"><input value={form.rcNumber} onChange={set("rcNumber")} style={inp} /></Field>
-                  <Row2>
-                    <Field label="Insurance Expiry"><input type="date" value={form.insuranceExpiry} onChange={set("insuranceExpiry")} style={inp} /></Field>
-                    <Field label="Fitness Expiry"><input type="date" value={form.fitnessExpiry} onChange={set("fitnessExpiry")} style={inp} /></Field>
-                  </Row2>
-                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
-                    <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
-                    <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
-                  </div>
+                  {formContent}
                 </form>
               )}
             </motion.div>

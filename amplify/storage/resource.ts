@@ -18,5 +18,8 @@ export const storage = defineStorage({
     'drivers/*': [
       allow.authenticated.to(['read', 'write', 'delete']),
     ],
+    'vehicles/*': [
+      allow.authenticated.to(['read', 'write', 'delete']),
+    ],
   })
 });
