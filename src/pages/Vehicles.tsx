@@ -11,12 +11,14 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const client = generateClient<Schema>();
 type Vehicle = Schema["Vehicle"]["type"];
-type VettingStatus = "PENDING_REVIEW" | "VETTED" | "SUSPENDED";
+type VettingStatus = "PENDING_REVIEW" | "VETTED" | "SUSPENDED" | "INSURANCE_EXPIRED" | "LICENSE_EXPIRED";
 
 const VETTING_CFG: Record<VettingStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   PENDING_REVIEW: { label: "Pending Review", color: "var(--status-pending)",   bg: "hsla(38,92%,52%,0.12)",  icon: <Clock size={12} /> },
   VETTED:         { label: "Vetted",          color: "var(--status-delivered)", bg: "hsla(160,60%,45%,0.12)", icon: <ShieldCheck size={12} /> },
   SUSPENDED:      { label: "Suspended",       color: "var(--status-blocked)",   bg: "hsla(0,72%,56%,0.12)",   icon: <ShieldAlert size={12} /> },
+  INSURANCE_EXPIRED: { label: "Insurance Expired", color: "var(--status-blocked)", bg: "hsla(0,72%,56%,0.12)", icon: <ShieldAlert size={12} /> },
+  LICENSE_EXPIRED:   { label: "License Expired", color: "var(--status-blocked)", bg: "hsla(0,72%,56%,0.12)", icon: <ShieldAlert size={12} /> },
 };
 
 const VEHICLE_LABELS: Record<string, string> = {
@@ -37,6 +39,7 @@ const empty = {
 
 export default function Vehicles() {
   const [vehicles, setVehicles]     = useState<Vehicle[]>([]);
+  const [drivers, setDrivers]       = useState<Schema["Driver"]["type"][]>([]);
   const [loading, setLoading]       = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<Vehicle | null>(null);
@@ -78,16 +81,34 @@ export default function Vehicles() {
   const [uploadStatusType, setUploadStatusType] = useState<"success" | "error" | "info">("info");
   const uploadStatusTimer = useRef<number | null>(null);
 
+  const [toastMessage, setToastMessage] = useState<string>("");
+  const toastTimer = useRef<number | null>(null);
+
   useEffect(() => {
     const sub = client.models.Vehicle.observeQuery({ authMode: "apiKey" }).subscribe({
-      next: (d) => { setVehicles([...d.items]); setLoading(false); },
+      next: (d) => { 
+        const todayStr = new Date().toISOString().split("T")[0];
+        const updatedItems = d.items.map(item => {
+          if (item.vettingStatus === 'VETTED' && item.insuranceExpiry && item.insuranceExpiry < todayStr) {
+             client.models.Vehicle.update({ id: item.id, vettingStatus: "INSURANCE_EXPIRED" }, { authMode: "apiKey" });
+             return { ...item, vettingStatus: "INSURANCE_EXPIRED" as VettingStatus };
+          }
+          return item;
+        });
+        setVehicles(updatedItems); 
+        setLoading(false); 
+      },
     });
-    return () => sub.unsubscribe();
+    const subDrivers = client.models.Driver.observeQuery({ authMode: "apiKey" }).subscribe({
+      next: (d) => setDrivers([...d.items]),
+    });
+    return () => { sub.unsubscribe(); subDrivers.unsubscribe(); };
   }, []);
 
   useEffect(() => {
     return () => {
       if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
     };
   }, []);
 
@@ -103,6 +124,12 @@ export default function Vehicles() {
     setUploadStatusType(type);
     if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
     uploadStatusTimer.current = window.setTimeout(() => setUploadStatusMessage(""), 3000);
+  }
+
+  function showToast(message: string) {
+    setToastMessage(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToastMessage(""), 5000);
   }
 
   function isPdfKey(path?: string | null): boolean {
@@ -233,6 +260,21 @@ export default function Vehicles() {
 
   const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((v) => ({ ...v, [f]: e.target.value }));
+
+  const handleOwnerNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    const matched = drivers.find(d => d.name === val);
+    if (matched) {
+      setForm(v => ({
+        ...v,
+        ownerName: val,
+        ownerPhone: v.ownerPhone || matched.phone || "",
+        ownerAddress: v.ownerAddress || matched.address || ""
+      }));
+    } else {
+      setForm(v => ({ ...v, ownerName: val }));
+    }
+  };
 
   function handleClose() {
     if (saving) return;
@@ -410,8 +452,19 @@ export default function Vehicles() {
     );
   }
 
-  async function updateVetting(id: string, vettingStatus: VettingStatus) {
-    await client.models.Vehicle.update({ id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
+  async function updateVetting(v: Vehicle, vettingStatus: VettingStatus) {
+    if (vettingStatus === "VETTED") {
+      const todayStr = new Date().toISOString().split("T")[0];
+      if (v.insuranceExpiry && v.insuranceExpiry < todayStr) {
+        showToast("Insurance has expired, update the insurance expiry date before vetting");
+        return;
+      }
+      if (v.fitnessExpiry && v.fitnessExpiry < todayStr) {
+        showToast("Fitness has expired, update the fitness expiry date before vetting");
+        return;
+      }
+    }
+    await client.models.Vehicle.update({ id: v.id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
   }
 
   const dialogInitial = editTarget ? { opacity: 0, y: -10 } : { x: "100%" };
@@ -447,9 +500,15 @@ export default function Vehicles() {
       </Row2>
 
       <div style={{ fontWeight: 600, marginTop: 16, marginBottom: -4, color: "var(--foreground)" }}>Owner Details</div>
+      <datalist id="driver-names">
+        {drivers.map(d => <option key={d.id} value={d.name} />)}
+      </datalist>
+      <datalist id="driver-phones">
+        {drivers.map(d => <option key={d.id} value={d.phone} />)}
+      </datalist>
       <Row2>
-        <Field label="Name"><input value={form.ownerName} onChange={set("ownerName")} style={inp} /></Field>
-        <Field label="Phone"><input value={form.ownerPhone} onChange={set("ownerPhone")} style={inp} /></Field>
+        <Field label="Name *"><input required list="driver-names" value={form.ownerName} onChange={handleOwnerNameChange} style={inp} /></Field>
+        <Field label="Phone *"><input required list="driver-phones" value={form.ownerPhone} onChange={set("ownerPhone")} style={inp} /></Field>
       </Row2>
       <Field label="Address"><input value={form.ownerAddress} onChange={set("ownerAddress")} style={inp} /></Field>
 
@@ -548,6 +607,24 @@ export default function Vehicles() {
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1100, margin: "0 auto" }}>
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+            style={{
+              position: "fixed", top: 24, left: 24, zIndex: 9999,
+              background: "var(--card)", border: "1px solid var(--border)", borderLeft: "4px solid var(--status-blocked)",
+              boxShadow: "var(--shadow-elegant)", padding: "16px 20px", borderRadius: "var(--radius-md)",
+              display: "flex", alignItems: "center", gap: 12
+            }}
+          >
+            <ShieldAlert size={20} color="var(--status-blocked)" />
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--foreground)" }}>{toastMessage}</span>
+            <button onClick={() => setToastMessage("")} style={{ background: "none", border: "none", color: "var(--muted-foreground)", cursor: "pointer", display: "flex" }}><X size={16} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
           <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700 }}>Vehicles</h2>
@@ -594,11 +671,13 @@ export default function Vehicles() {
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 99, fontSize: 12, color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.color}33` }}>
                     {cfg.icon} {cfg.label}
                   </span>
-                  <select value={vs} onChange={(e) => updateVetting(v.id, e.target.value as VettingStatus)}
+                  <select value={vs} onChange={(e) => updateVetting(v, e.target.value as VettingStatus)}
                     style={{ background: "var(--accent)", border: "1px solid var(--border)", color: "var(--foreground)", borderRadius: "var(--radius-sm)", padding: "4px 8px", fontSize: 12, cursor: "pointer", outline: "none" }}>
                     <option value="PENDING_REVIEW">Pending Review</option>
                     <option value="VETTED">Vetted</option>
                     <option value="SUSPENDED">Suspended</option>
+                    <option value="LICENSE_EXPIRED">License Expired</option>
+                    <option value="INSURANCE_EXPIRED">Insurance Expired</option>
                   </select>
                   <button onClick={() => openEdit(v)} aria-label="Edit vehicle" style={iconBtn}>
                     <Pencil size={14} />

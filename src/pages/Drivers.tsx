@@ -11,12 +11,14 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const client = generateClient<Schema>();
 type Driver = Schema["Driver"]["type"];
-type VettingStatus = "PENDING_REVIEW" | "VETTED" | "SUSPENDED";
+type VettingStatus = "PENDING_REVIEW" | "VETTED" | "SUSPENDED" | "INSURANCE_EXPIRED" | "LICENSE_EXPIRED";
 
 const VETTING_CFG: Record<VettingStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   PENDING_REVIEW: { label: "Pending Review", color: "var(--status-pending)",   bg: "hsla(38,92%,52%,0.12)",  icon: <Clock size={12} /> },
   VETTED:         { label: "Vetted",          color: "var(--status-delivered)", bg: "hsla(160,60%,45%,0.12)", icon: <ShieldCheck size={12} /> },
   SUSPENDED:      { label: "Suspended",       color: "var(--status-blocked)",   bg: "hsla(0,72%,56%,0.12)",   icon: <ShieldAlert size={12} /> },
+  INSURANCE_EXPIRED: { label: "Insurance Expired", color: "var(--status-blocked)", bg: "hsla(0,72%,56%,0.12)", icon: <ShieldAlert size={12} /> },
+  LICENSE_EXPIRED:   { label: "License Expired", color: "var(--status-blocked)", bg: "hsla(0,72%,56%,0.12)", icon: <ShieldAlert size={12} /> },
 };
 
 const VEHICLE_LABELS: Record<string, string> = {
@@ -61,9 +63,13 @@ export default function Drivers() {
   const [uploadStatusType, setUploadStatusType] = useState<"success" | "error" | "info">("info");
   const uploadStatusTimer = useRef<number | null>(null);
 
+  const [toastMessage, setToastMessage] = useState<string>("");
+  const toastTimer = useRef<number | null>(null);
+
   useEffect(() => {
     return () => {
       if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
     };
   }, []);
 
@@ -79,6 +85,12 @@ export default function Drivers() {
     setUploadStatusType(type);
     if (uploadStatusTimer.current) window.clearTimeout(uploadStatusTimer.current);
     uploadStatusTimer.current = window.setTimeout(() => setUploadStatusMessage(""), 3000);
+  }
+
+  function showToast(message: string) {
+    setToastMessage(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToastMessage(""), 5000);
   }
 
   function isPdfKey(path?: string | null): boolean {
@@ -120,7 +132,18 @@ export default function Drivers() {
 
   useEffect(() => {
     const sub = client.models.Driver.observeQuery({ authMode: "apiKey" }).subscribe({
-      next: (d) => { setDrivers([...d.items]); setLoading(false); },
+      next: (d) => { 
+        const todayStr = new Date().toISOString().split("T")[0];
+        const updatedItems = d.items.map(item => {
+          if (item.vettingStatus === 'VETTED' && item.licenseExpiry && item.licenseExpiry < todayStr) {
+             client.models.Driver.update({ id: item.id, vettingStatus: "LICENSE_EXPIRED" }, { authMode: "apiKey" });
+             return { ...item, vettingStatus: "LICENSE_EXPIRED" as VettingStatus };
+          }
+          return item;
+        });
+        setDrivers(updatedItems); 
+        setLoading(false); 
+      },
     });
     return () => sub.unsubscribe();
   }, []);
@@ -251,8 +274,15 @@ export default function Drivers() {
     }
   }
 
-  async function updateVetting(id: string, vettingStatus: VettingStatus) {
-    await client.models.Driver.update({ id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
+  async function updateVetting(d: Driver, vettingStatus: VettingStatus) {
+    if (vettingStatus === "VETTED") {
+      const todayStr = new Date().toISOString().split("T")[0];
+      if (d.licenseExpiry && d.licenseExpiry < todayStr) {
+        showToast("License has expired, update the license expire date before vetting");
+        return;
+      }
+    }
+    await client.models.Driver.update({ id: d.id, vettingStatus, updatedDate: new Date().toISOString() }, { authMode: "apiKey" });
   }
 
   // Handlers for attachments
@@ -453,6 +483,24 @@ export default function Drivers() {
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1100, margin: "0 auto" }}>
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+            style={{
+              position: "fixed", top: 24, left: 24, zIndex: 9999,
+              background: "var(--card)", border: "1px solid var(--border)", borderLeft: "4px solid var(--status-blocked)",
+              boxShadow: "var(--shadow-elegant)", padding: "16px 20px", borderRadius: "var(--radius-md)",
+              display: "flex", alignItems: "center", gap: 12
+            }}
+          >
+            <ShieldAlert size={20} color="var(--status-blocked)" />
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--foreground)" }}>{toastMessage}</span>
+            <button onClick={() => setToastMessage("")} style={{ background: "none", border: "none", color: "var(--muted-foreground)", cursor: "pointer", display: "flex" }}><X size={16} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
           <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700 }}>Drivers</h2>
@@ -499,11 +547,13 @@ export default function Drivers() {
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 99, fontSize: 12, color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.color}33` }}>
                     {cfg.icon} {cfg.label}
                   </span>
-                  <select value={v} onChange={(e) => updateVetting(d.id, e.target.value as VettingStatus)}
+                  <select value={v} onChange={(e) => updateVetting(d, e.target.value as VettingStatus)}
                     style={{ background: "var(--accent)", border: "1px solid var(--border)", color: "var(--foreground)", borderRadius: "var(--radius-sm)", padding: "4px 8px", fontSize: 12, cursor: "pointer", outline: "none" }}>
                     <option value="PENDING_REVIEW">Pending Review</option>
                     <option value="VETTED">Vetted</option>
                     <option value="SUSPENDED">Suspended</option>
+                    <option value="LICENSE_EXPIRED">License Expired</option>
+                    <option value="INSURANCE_EXPIRED">Insurance Expired</option>
                   </select>
                   <button onClick={() => openEdit(d)} aria-label="Edit driver" style={iconBtn}>
                     <Pencil size={14} />

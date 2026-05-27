@@ -1,7 +1,7 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
 const VEHICLE_TYPES = ["AUTO", "TROLLEY", "TATA_ACE", "SMALL_TRUCK", "LARGE_TRUCK", "OTHER"] as const;
-const VETTING       = ["PENDING_REVIEW", "VETTED", "SUSPENDED"] as const;
+const VETTING       = ["PENDING_REVIEW", "VETTED", "SUSPENDED", "INSURANCE_EXPIRED", "LICENSE_EXPIRED"] as const;
 const TRIP_STATUS   = ["COMPLETED", "IN_PROGRESS", "PENDING", "BLOCKED", "ISSUES", "OTHER"] as const;
 
 const schema = a.schema({
