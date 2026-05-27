@@ -41,6 +41,7 @@ export default function Vehicles() {
   const [showDialog, setShowDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<Vehicle | null>(null);
   const [form, setForm]             = useState({ ...empty });
+  const [initialForm, setInitialForm] = useState({ ...empty });
   const [saving, setSaving]         = useState(false);
 
   // File input refs
@@ -144,6 +145,7 @@ export default function Vehicles() {
   function openAdd() {
     setEditTarget(null);
     setForm({ ...empty });
+    setInitialForm({ ...empty });
     setRcLabel(""); setRcPreviewUrl(null); setRcThumbnail(null);
     setInsuranceLabel(""); setInsurancePreviewUrl(null); setInsuranceThumbnail(null);
     setTaxPermitLabel(""); setTaxPermitPreviewUrl(null); setTaxPermitThumbnail(null);
@@ -153,7 +155,7 @@ export default function Vehicles() {
 
   function openEdit(v: Vehicle) {
     setEditTarget(v);
-    setForm({
+    const loadedForm = {
       vehicleNumber: v.vehicleNumber,
       type: v.type ?? "TATA_ACE",
       make: v.make ?? "",
@@ -177,7 +179,9 @@ export default function Vehicles() {
       photoBackUrl: v.photoBackUrl ?? "",
       photoLeftUrl: v.photoLeftUrl ?? "",
       photoRightUrl: v.photoRightUrl ?? "",
-    });
+    };
+    setForm(loadedForm);
+    setInitialForm(loadedForm);
 
     // prefetch previews
     (async () => {
@@ -229,6 +233,16 @@ export default function Vehicles() {
 
   const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((v) => ({ ...v, [f]: e.target.value }));
+
+  function handleClose() {
+    if (saving) return;
+    if (JSON.stringify(form) !== JSON.stringify(initialForm)) {
+      if (!window.confirm("You have unsaved changes. Are you sure you want to discard them and exit?")) {
+        return;
+      }
+    }
+    setShowDialog(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true);
@@ -526,7 +540,7 @@ export default function Vehicles() {
       </div>
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
+        <button type="button" onClick={handleClose} style={ghostBtn}>Cancel</button>
         <button type="submit" disabled={saving} style={primaryBtn}>{saving ? "Saving…" : editTarget ? "Save changes" : "Add Vehicle"}</button>
       </div>
     </>
@@ -599,12 +613,12 @@ export default function Vehicles() {
       <AnimatePresence>
         {showDialog && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDialog(false)}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={handleClose}
               style={{ position: "fixed", inset: 0, zIndex: 200, background: "hsla(222,28%,4%,0.7)", backdropFilter: "blur(4px)" }} />
             <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} transition={dialogTransition as any} style={dialogStyle as any}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 10 }}>
                 <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{editTarget ? "Edit Vehicle" : "Add Vehicle"}</h3>
-                <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
+                <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
               </div>
 
               <AnimatePresence>
@@ -623,7 +637,7 @@ export default function Vehicles() {
                 <div style={{ display: 'flex', gap: 20, padding: 24 }}>
                   <div style={{ width: 300, maxHeight: '70vh', overflowY: 'auto', borderRight: '1px solid var(--border)', paddingRight: 12 }}>
                     {vehicles.map((vv) => (
-                      <div key={vv.id} onClick={() => openEdit(vv)}
+                      <div key={vv.id} onClick={() => { if (JSON.stringify(form) !== JSON.stringify(initialForm)) { if (!window.confirm("You have unsaved changes. Are you sure you want to discard them?")) return; } openEdit(vv); }}
                         style={{ padding: 10, borderRadius: 8, cursor: 'pointer', marginBottom: 8, background: editTarget?.id === vv.id ? 'rgba(0,128,255,0.06)' : 'transparent', border: editTarget?.id === vv.id ? '1px solid var(--accent)' : '1px solid transparent' }}>
                         <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--primary)' }}>{vv.vehicleNumber}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{vv.type ? VEHICLE_LABELS[vv.type] : "—"}</div>

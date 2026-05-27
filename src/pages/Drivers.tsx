@@ -32,6 +32,7 @@ export default function Drivers() {
   const [showDialog, setShowDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<Driver | null>(null);
   const [form, setForm]         = useState({ ...empty });
+  const [initialForm, setInitialForm] = useState({ ...empty });
   const [saving, setSaving]     = useState(false);
   const licenseInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -127,12 +128,13 @@ export default function Drivers() {
   function openAdd() {
     setEditTarget(null);
     setForm({ ...empty });
+    setInitialForm({ ...empty });
     setShowDialog(true);
   }
 
   function openEdit(d: Driver) {
     setEditTarget(d);
-    setForm({
+    const loadedForm = {
       name: d.name, phone: d.phone,
       vehicleType: d.vehicleType ?? "TATA_ACE",
       preferredVendor: d.preferredVendor ?? "",
@@ -145,7 +147,9 @@ export default function Drivers() {
       panNumber: d.panNumber ?? "",
       panUrl: d.panUrl ?? "",
       notes: d.notes ?? "",
-    });
+    };
+    setForm(loadedForm);
+    setInitialForm(loadedForm);
 
     // prefetch attachment previews if present
     (async () => {
@@ -186,6 +190,16 @@ export default function Drivers() {
 
   const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((v) => ({ ...v, [f]: e.target.value }));
+
+  function handleClose() {
+    if (saving) return;
+    if (JSON.stringify(form) !== JSON.stringify(initialForm)) {
+      if (!window.confirm("You have unsaved changes. Are you sure you want to discard them and exit?")) {
+        return;
+      }
+    }
+    setShowDialog(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true);
@@ -431,7 +445,7 @@ export default function Drivers() {
 
       <div style={{ marginTop: 8 }}><Field label="Notes"><textarea value={form.notes} onChange={set("notes")} rows={2} style={{ ...inp, resize: 'vertical' }} /></Field></div>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
-        <button type="button" onClick={() => setShowDialog(false)} style={ghostBtn}>Cancel</button>
+        <button type="button" onClick={handleClose} style={ghostBtn}>Cancel</button>
         <button type="submit" disabled={saving} style={primaryBtn}>{saving ? 'Saving…' : editTarget ? 'Save changes' : 'Add Driver'}</button>
       </div>
     </>
@@ -504,18 +518,18 @@ export default function Drivers() {
       <AnimatePresence>
         {showDialog && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowDialog(false)}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={handleClose}
               style={{ position: "fixed", inset: 0, zIndex: 200, background: "hsla(222,28%,4%,0.7)", backdropFilter: "blur(4px)" }} />
             <motion.div initial={dialogInitial} animate={dialogAnimate} exit={dialogExit} transition={dialogTransition as any} style={dialogStyle as any}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--card)", zIndex: 10 }}>
                 <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 17 }}>{editTarget ? "Edit Driver" : "Add Driver"}</h3>
-                <button onClick={() => setShowDialog(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
+                <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)" }}><X size={18} /></button>
               </div>
               {editTarget ? (
                 <div style={{ display: 'flex', gap: 20, padding: 24 }}>
                   <div style={{ width: 300, maxHeight: '70vh', overflowY: 'auto', borderRight: '1px solid var(--border)', paddingRight: 12 }}>
                     {drivers.map((dd) => (
-                      <div key={dd.id} onClick={() => openEdit(dd)}
+                      <div key={dd.id} onClick={() => { if (JSON.stringify(form) !== JSON.stringify(initialForm)) { if (!window.confirm("You have unsaved changes. Are you sure you want to discard them?")) return; } openEdit(dd); }}
                         style={{ padding: 10, borderRadius: 8, cursor: 'pointer', marginBottom: 8, background: editTarget?.id === dd.id ? 'rgba(0,128,255,0.06)' : 'transparent', border: editTarget?.id === dd.id ? '1px solid var(--accent)' : '1px solid transparent' }}>
                         <div style={{ fontWeight: 600 }}>{dd.name}</div>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted-foreground)' }}>{dd.phone}</div>
